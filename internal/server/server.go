@@ -7,8 +7,8 @@ import (
 	"net"
 	"strings"
 
-	"github.com/richardktran/lsm-tree-go-my-way/cmd/cli/internal/constant"
-	"github.com/richardktran/lsm-tree-go-my-way/cmd/cli/internal/store"
+	"github.com/richardktran/lsm-tree-go-my-way/internal/constant"
+	"github.com/richardktran/lsm-tree-go-my-way/internal/store"
 )
 
 type Server struct {
