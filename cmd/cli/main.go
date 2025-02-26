@@ -7,9 +7,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/richardktran/lsm-tree-go-my-way/cmd/cli/internal/constant"
-	"github.com/richardktran/lsm-tree-go-my-way/cmd/cli/internal/server"
-	"github.com/richardktran/lsm-tree-go-my-way/cmd/cli/internal/store/memory"
+	"github.com/richardktran/lsm-tree-go-my-way/internal/constant"
+	"github.com/richardktran/lsm-tree-go-my-way/internal/server"
+	"github.com/richardktran/lsm-tree-go-my-way/internal/store/memory"
 )
 
 const (

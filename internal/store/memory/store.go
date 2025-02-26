@@ -3,7 +3,7 @@ package memory
 import (
 	"sync"
 
-	"github.com/richardktran/lsm-tree-go-my-way/cmd/cli/internal/store"
+	"github.com/richardktran/lsm-tree-go-my-way/internal/store"
 )
 
 var _ store.Store = (*MemoryStore)(nil)
