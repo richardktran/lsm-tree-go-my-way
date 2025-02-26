@@ -9,7 +9,7 @@ import (
 
 	"github.com/richardktran/lsm-tree-go-my-way/cmd/cli/internal/constant"
 	"github.com/richardktran/lsm-tree-go-my-way/cmd/cli/internal/server"
-	"github.com/richardktran/lsm-tree-go-my-way/cmd/cli/internal/store"
+	"github.com/richardktran/lsm-tree-go-my-way/cmd/cli/internal/store/memory"
 )
 
 const (
@@ -19,7 +19,7 @@ const (
 
 func main() {
 	hostPort := fmt.Sprintf("%s:%s", Host, Port)
-	store := store.NewStore()
+	store := memory.NewStore()
 	svr := server.NewServer(store, hostPort)
 
 	go svr.StartServer()
@@ -50,7 +50,7 @@ func main() {
 		fmt.Fprintf(conn, "%s\n", cmd)
 
 		response, _ := bufio.NewReader(conn).ReadString('\n')
-		fmt.Println(response)
+		fmt.Print(response)
 		conn.Close()
 
 		fmt.Printf("%s> ", hostPort)

@@ -12,11 +12,11 @@ import (
 )
 
 type Server struct {
-	store *store.Store
+	store store.Store
 	host  string
 }
 
-func NewServer(store *store.Store, host string) *Server {
+func NewServer(store store.Store, host string) *Server {
 	return &Server{
 		store: store,
 		host:  host,
@@ -61,40 +61,42 @@ func (s *Server) handleConnection(conn net.Conn) {
 		case constant.DEL:
 			s.handleDelete(conn, parts)
 		default:
-			fmt.Fprintf(conn, "Unknown command: %s\n", cmd)
+			fmt.Fprintf(conn, "Unknown command: %s", cmd)
 		}
+
+		fmt.Fprint(conn, "\n")
 	}
 }
 
 func (s *Server) handleGet(conn net.Conn, parts []string) {
 	if len(parts) != 2 {
-		fmt.Fprintf(conn, "ERROR: %s command requires exactly 1 argument\n", constant.GET)
+		fmt.Fprintf(conn, "ERROR: %s command requires exactly 1 argument", constant.GET)
 	}
 	val, exists := s.store.Get(parts[1])
 	if !exists {
-		fmt.Fprintf(conn, "(nil)\n")
+		fmt.Fprintf(conn, "(nil)")
 		return
 	}
 
-	fmt.Fprintf(conn, "%s\n", val)
+	fmt.Fprintf(conn, "%s", val)
 }
 
 func (s *Server) handleSet(conn net.Conn, parts []string) {
 	if len(parts) != 3 {
-		fmt.Fprintf(conn, "ERROR: %s command requires exactly 2 arguments\n", constant.SET)
+		fmt.Fprintf(conn, "ERROR: %s command requires exactly 2 arguments", constant.SET)
 		return
 	}
 
 	s.store.Set(parts[1], parts[2])
-	fmt.Fprintf(conn, "OK\n")
+	fmt.Fprintf(conn, "OK")
 }
 
 func (s *Server) handleDelete(conn net.Conn, parts []string) {
 	if len(parts) != 2 {
-		fmt.Fprintf(conn, "ERROR: %s command requires exactly 1 argument\n", constant.DEL)
+		fmt.Fprintf(conn, "ERROR: %s command requires exactly 1 argument", constant.DEL)
 		return
 	}
 
 	s.store.Delete(parts[1])
-	fmt.Fprintf(conn, "OK\n")
+	fmt.Fprintf(conn, "OK")
 }
