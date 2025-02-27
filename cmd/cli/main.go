@@ -9,7 +9,7 @@ import (
 
 	"github.com/richardktran/lsm-tree-go-my-way/internal/constant"
 	"github.com/richardktran/lsm-tree-go-my-way/internal/server"
-	"github.com/richardktran/lsm-tree-go-my-way/internal/store/memory"
+	"github.com/richardktran/lsm-tree-go-my-way/internal/store/lsmtree"
 )
 
 const (
@@ -19,7 +19,7 @@ const (
 
 func main() {
 	hostPort := fmt.Sprintf("%s:%s", Host, Port)
-	store := memory.NewStore()
+	store := lsmtree.NewStore()
 	svr := server.NewServer(store, hostPort)
 
 	go svr.StartServer()

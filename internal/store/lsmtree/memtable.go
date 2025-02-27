@@ -1,0 +1,30 @@
+package lsmtree
+
+import (
+	"github.com/richardktran/lsm-tree-go-my-way/internal/algorithm"
+	"github.com/richardktran/lsm-tree-go-my-way/internal/kv"
+)
+
+type MemTable struct {
+	sortedData *algorithm.SortedList
+}
+
+func NewMemTable() *MemTable {
+	return &MemTable{
+		sortedData: algorithm.NewSortedList(),
+	}
+}
+
+func (m *MemTable) Get(key kv.Key) (kv.Value, bool) {
+
+	return m.sortedData.Get(key)
+}
+
+func (m *MemTable) Set(key kv.Key, value kv.Value) {
+
+	m.sortedData.Insert(key, value)
+}
+
+func (m *MemTable) Delete(key kv.Key) {
+	m.sortedData.Delete(key)
+}
