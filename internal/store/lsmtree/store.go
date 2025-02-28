@@ -38,15 +38,13 @@ func (s *LSMTreeStore) Set(key kv.Key, value kv.Value) {
 	s.storeLock.Lock()
 	defer s.storeLock.Unlock()
 
-	recordSize := kv.Record{Key: key, Value: value}.Size()
+	s.memTable.Set(key, value)
 
 	// Check if memTable is full
-	if s.memTable.Size()+recordSize > s.config.MemTableSizeThreshold {
-		s.flushMemTable(s.memTable.Clone())
+	if s.memTable.Size() >= s.config.MemTableSizeThreshold {
+		go s.flushMemTable(s.memTable.Clone())
 		s.memTable = NewMemTable()
 	}
-
-	s.memTable.Set(key, value)
 }
 
 func (s *LSMTreeStore) Delete(key kv.Key) {
