@@ -1,6 +1,7 @@
 package algorithm
 
 import (
+	"log"
 	"sort"
 
 	"github.com/richardktran/lsm-tree-go-my-way/internal/kv"
@@ -29,12 +30,12 @@ func (s *SortedList) Insert(key kv.Key, value kv.Value) {
 	_, exists := s.Get(key)
 	if exists {
 		s.Delete(key)
-		s.size -= kv.Record{Key: key, Value: value}.Size()
 	}
 
 	s.data = append(s.data, kv.Record{Key: key, Value: value})
 	s.size += kv.Record{Key: key, Value: value}.Size()
 	s.Sort()
+	log.Println("Size of sorted list: ", s.size)
 }
 
 func (s *SortedList) Get(key kv.Key) (kv.Value, bool) {
@@ -68,8 +69,8 @@ func (s *SortedList) Delete(key kv.Key) {
 		mid := low + (high-low)/2
 
 		if s.data[mid].Key == key {
-			s.data = append(s.data[:mid], s.data[mid+1:]...)
 			s.size -= kv.Record{Key: key, Value: s.data[mid].Value}.Size()
+			s.data = append(s.data[:mid], s.data[mid+1:]...)
 			return
 		}
 

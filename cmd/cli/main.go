@@ -18,7 +18,7 @@ const (
 )
 
 func main() {
-	hostPort := fmt.Sprintf("%s:%s", Host, Port)
+	hostPort := net.JoinHostPort(Host, Port)
 
 	config := lsmtree.Config{
 		MemTableSizeThreshold: 10, // 10 bytes
