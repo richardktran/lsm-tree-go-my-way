@@ -19,7 +19,12 @@ const (
 
 func main() {
 	hostPort := fmt.Sprintf("%s:%s", Host, Port)
-	store := lsmtree.NewStore()
+
+	config := lsmtree.Config{
+		MemTableSizeThreshold: 10, // 10 bytes
+	}
+
+	store := lsmtree.NewStore(config)
 	svr := server.NewServer(store, hostPort)
 
 	go svr.StartServer()
