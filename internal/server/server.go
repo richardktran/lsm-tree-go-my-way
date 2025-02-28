@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/richardktran/lsm-tree-go-my-way/internal/constant"
+	"github.com/richardktran/lsm-tree-go-my-way/internal/kv"
 	"github.com/richardktran/lsm-tree-go-my-way/internal/store"
 )
 
@@ -72,7 +73,7 @@ func (s *Server) handleGet(conn net.Conn, parts []string) {
 	if len(parts) != 2 {
 		fmt.Fprintf(conn, "ERROR: %s command requires exactly 1 argument", constant.GET)
 	}
-	val, exists := s.store.Get(parts[1])
+	val, exists := s.store.Get(kv.Key(parts[1]))
 	if !exists {
 		fmt.Fprintf(conn, "(nil)")
 		return
@@ -87,7 +88,7 @@ func (s *Server) handleSet(conn net.Conn, parts []string) {
 		return
 	}
 
-	s.store.Set(parts[1], parts[2])
+	s.store.Set(kv.Key(parts[1]), kv.Value(parts[2]))
 	fmt.Fprintf(conn, "OK")
 }
 
@@ -97,6 +98,6 @@ func (s *Server) handleDelete(conn net.Conn, parts []string) {
 		return
 	}
 
-	s.store.Delete(parts[1])
+	s.store.Delete(kv.Key(parts[1]))
 	fmt.Fprintf(conn, "OK")
 }
