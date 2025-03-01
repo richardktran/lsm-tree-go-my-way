@@ -5,8 +5,8 @@ type Key string
 type Value string
 
 type Record struct {
-	Key   Key
-	Value Value
+	Key   Key   `json:"key"`
+	Value Value `json:"value"`
 }
 
 // Size returns the size of the record in bytes (key + value)

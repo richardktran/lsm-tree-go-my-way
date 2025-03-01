@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/richardktran/lsm-tree-go-my-way/internal/config"
 	"github.com/richardktran/lsm-tree-go-my-way/internal/constant"
 	"github.com/richardktran/lsm-tree-go-my-way/internal/server"
 	"github.com/richardktran/lsm-tree-go-my-way/internal/store/lsmtree"
@@ -20,8 +21,15 @@ const (
 func main() {
 	hostPort := net.JoinHostPort(Host, Port)
 
-	config := lsmtree.Config{
-		MemTableSizeThreshold: 10, // 10 bytes
+	config := config.Config{
+		MemTableSizeThreshold: 10, // 20 bytes
+		SSTableBlockSize:      5,  // 5 bytes
+		DataDir:               "./data",
+	}
+
+	if err := os.MkdirAll(config.DataDir, os.ModePerm); err != nil {
+		fmt.Println("Failed to create data directory: ", err)
+		return
 	}
 
 	store := lsmtree.NewStore(config)

@@ -15,8 +15,8 @@ func NewMemTable() *MemTable {
 	}
 }
 
-func (m *MemTable) Clone() *MemTable {
-	return &MemTable{
+func (m *MemTable) Clone() MemTable {
+	return MemTable{
 		sortedData: m.sortedData.Clone(),
 	}
 }
@@ -36,4 +36,8 @@ func (m *MemTable) Delete(key kv.Key) {
 
 func (m *MemTable) Size() int {
 	return m.sortedData.Size()
+}
+
+func (m *MemTable) GetAll() []kv.Record {
+	return m.sortedData.GetAll()
 }

@@ -91,3 +91,7 @@ func (s *SortedList) Sort() {
 func (s *SortedList) Size() int {
 	return s.size
 }
+
+func (s *SortedList) GetAll() []kv.Record {
+	return s.data
+}
