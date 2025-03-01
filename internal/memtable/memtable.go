@@ -1,8 +1,8 @@
-package lsmtree
+package memtable
 
 import (
-	"github.com/richardktran/lsm-tree-go-my-way/internal/algorithm"
 	"github.com/richardktran/lsm-tree-go-my-way/internal/kv"
+	"github.com/richardktran/lsm-tree-go-my-way/internal/memtable/algorithm"
 )
 
 type MemTable struct {

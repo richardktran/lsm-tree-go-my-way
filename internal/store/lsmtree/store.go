@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/richardktran/lsm-tree-go-my-way/internal/kv"
+	"github.com/richardktran/lsm-tree-go-my-way/internal/memtable"
 	"github.com/richardktran/lsm-tree-go-my-way/internal/store"
 )
 
@@ -13,7 +14,7 @@ var _ store.Store = (*LSMTreeStore)(nil)
 type LSMTreeStore struct {
 	config    Config
 	storeLock sync.RWMutex
-	memTable  *MemTable
+	memTable  *memtable.MemTable
 }
 
 type Config struct {
@@ -22,7 +23,7 @@ type Config struct {
 
 func NewStore(config Config) *LSMTreeStore {
 	return &LSMTreeStore{
-		memTable: NewMemTable(),
+		memTable: memtable.NewMemTable(),
 		config:   config,
 	}
 }
@@ -43,7 +44,7 @@ func (s *LSMTreeStore) Set(key kv.Key, value kv.Value) {
 	// Check if memTable is full
 	if s.memTable.Size() >= s.config.MemTableSizeThreshold {
 		go s.flushMemTable(s.memTable.Clone())
-		s.memTable = NewMemTable()
+		s.memTable = memtable.NewMemTable()
 	}
 }
 
@@ -55,7 +56,7 @@ func (s *LSMTreeStore) Delete(key kv.Key) {
 }
 
 // TODO: Implement this function after create SSTable
-func (s *LSMTreeStore) flushMemTable(memTable *MemTable) {
+func (s *LSMTreeStore) flushMemTable(memTable *memtable.MemTable) {
 	log.Print("Flushing memTable to disk")
 	// Create new SSTable
 	// Add values from memTable to SSTable
