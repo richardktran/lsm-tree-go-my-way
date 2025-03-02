@@ -21,6 +21,22 @@ func NewSortedArray() *SortedArray {
 	}
 }
 
+func BuildSortedArray(data []kv.Record) *SortedArray {
+	sort.Slice(data[:], func(i, j int) bool {
+		return data[i].Key < data[j].Key
+	})
+
+	size := 0
+	for _, record := range data {
+		size += record.Size()
+	}
+
+	return &SortedArray{
+		data: data,
+		size: size,
+	}
+}
+
 func (s *SortedArray) Clone() SortedList {
 	newList := NewSortedArray()
 	newList.data = make([]kv.Record, len(s.data))

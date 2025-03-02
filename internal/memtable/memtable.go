@@ -3,6 +3,7 @@ package memtable
 import (
 	"github.com/richardktran/lsm-tree-go-my-way/internal/kv"
 	"github.com/richardktran/lsm-tree-go-my-way/internal/memtable/algorithm"
+	"github.com/richardktran/lsm-tree-go-my-way/internal/wal"
 )
 
 type MemTable struct {
@@ -40,4 +41,21 @@ func (m *MemTable) Size() int {
 
 func (m *MemTable) GetAll() []kv.Record {
 	return m.sortedData.GetAll()
+}
+
+func LoadFromWAL(wal *wal.WAL) (*MemTable, error) {
+	lastTimestamp, err := wal.ReadLastItemFromMetaLog()
+	if err != nil {
+		return nil, err
+	}
+
+	// Read commit log
+	records, err := wal.ReadCommitLogAfterTimestamp(lastTimestamp)
+	if err != nil {
+		return nil, err
+	}
+
+	return &MemTable{
+		sortedData: algorithm.BuildSortedArray(records),
+	}, nil
 }

@@ -21,18 +21,20 @@ const (
 func main() {
 	hostPort := net.JoinHostPort(Host, Port)
 
-	config := config.Config{
+	appConfig := config.Config{
 		MemTableSizeThreshold: 60, // bytes
 		SSTableBlockSize:      40, // bytes
-		DataDir:               "./data",
+		RootDataDir:           "./data",
 	}
 
-	if err := os.MkdirAll(config.DataDir, os.ModePerm); err != nil {
-		fmt.Println("Failed to create data directory: ", err)
-		return
+	dirConfig := config.DirectoryConfig{
+		WALDir: "wal",
 	}
 
-	store := lsmtree.NewStore(config)
+	initDirs(appConfig.RootDataDir, &dirConfig)
+
+	store := lsmtree.NewStore(appConfig, dirConfig)
+
 	svr := server.NewServer(store, hostPort)
 
 	go svr.StartServer()
@@ -69,4 +71,15 @@ func main() {
 		fmt.Printf("%s> ", hostPort)
 	}
 
+}
+
+func initDirs(rootDir string, dirConfig *config.DirectoryConfig) {
+	if _, err := os.Stat(rootDir); os.IsNotExist(err) {
+		os.Mkdir(rootDir, os.ModePerm)
+	}
+
+	dirConfig.WALDir = fmt.Sprintf("%s/%s", rootDir, dirConfig.WALDir)
+	if _, err := os.Stat(dirConfig.WALDir); os.IsNotExist(err) {
+		os.Mkdir(dirConfig.WALDir, os.ModePerm)
+	}
 }
