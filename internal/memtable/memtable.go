@@ -6,12 +6,12 @@ import (
 )
 
 type MemTable struct {
-	sortedData *algorithm.SortedList
+	sortedData algorithm.SortedList
 }
 
 func NewMemTable() *MemTable {
 	return &MemTable{
-		sortedData: algorithm.NewSortedList(),
+		sortedData: algorithm.NewSortedArray(),
 	}
 }
 
@@ -27,7 +27,7 @@ func (m *MemTable) Get(key kv.Key) (kv.Value, bool) {
 }
 
 func (m *MemTable) Set(key kv.Key, value kv.Value) {
-	m.sortedData.Insert(key, value)
+	m.sortedData.Set(key, value)
 }
 
 func (m *MemTable) Delete(key kv.Key) {
