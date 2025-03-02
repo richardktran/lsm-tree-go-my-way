@@ -21,7 +21,8 @@ func NewSortedList() *SortedList {
 
 func (s *SortedList) Clone() *SortedList {
 	newList := NewSortedList()
-	_ = copy(newList.data, s.data)
+	newList.data = make([]kv.Record, len(s.data))
+	copy(newList.data, s.data)
 	newList.size = s.size
 	return newList
 }

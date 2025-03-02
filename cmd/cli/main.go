@@ -22,7 +22,7 @@ func main() {
 	hostPort := net.JoinHostPort(Host, Port)
 
 	config := config.Config{
-		MemTableSizeThreshold: 10, // 20 bytes
+		MemTableSizeThreshold: 20, // 20 bytes
 		SSTableBlockSize:      5,  // 5 bytes
 		DataDir:               "./data",
 	}
