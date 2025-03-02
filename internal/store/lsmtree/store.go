@@ -1,29 +1,29 @@
 package lsmtree
 
 import (
-	"log"
 	"sync"
 
+	"github.com/richardktran/lsm-tree-go-my-way/internal/config"
 	"github.com/richardktran/lsm-tree-go-my-way/internal/kv"
+	"github.com/richardktran/lsm-tree-go-my-way/internal/memtable"
+	"github.com/richardktran/lsm-tree-go-my-way/internal/sstable"
 	"github.com/richardktran/lsm-tree-go-my-way/internal/store"
 )
 
 var _ store.Store = (*LSMTreeStore)(nil)
 
 type LSMTreeStore struct {
-	config    Config
+	config    config.Config
 	storeLock sync.RWMutex
-	memTable  *MemTable
+	memTable  *memtable.MemTable
+	ssTables  []*sstable.SSTable
 }
 
-type Config struct {
-	MemTableSizeThreshold int
-}
-
-func NewStore(config Config) *LSMTreeStore {
+func NewStore(config config.Config) *LSMTreeStore {
 	return &LSMTreeStore{
-		memTable: NewMemTable(),
+		memTable: memtable.NewMemTable(),
 		config:   config,
+		ssTables: make([]*sstable.SSTable, 0),
 	}
 }
 
@@ -42,8 +42,8 @@ func (s *LSMTreeStore) Set(key kv.Key, value kv.Value) {
 
 	// Check if memTable is full
 	if s.memTable.Size() >= s.config.MemTableSizeThreshold {
-		go s.flushMemTable(s.memTable.Clone())
-		s.memTable = NewMemTable()
+		s.flushMemTable(s.memTable.Clone())
+		s.memTable = memtable.NewMemTable()
 	}
 }
 
@@ -54,12 +54,10 @@ func (s *LSMTreeStore) Delete(key kv.Key) {
 	s.memTable.Delete(key)
 }
 
-// TODO: Implement this function after create SSTable
-func (s *LSMTreeStore) flushMemTable(memTable *MemTable) {
-	log.Print("Flushing memTable to disk")
-	// Create new SSTable
-	// Add values from memTable to SSTable
-	// Flush SSTable to disk
-	// Update sparse index
-	// update bloom filter
+func (s *LSMTreeStore) flushMemTable(memTable memtable.MemTable) {
+	ssTable := sstable.NewSSTable(uint64(len(s.ssTables)), s.config)
+
+	go ssTable.Flush(memTable)
+
+	s.ssTables = append(s.ssTables, ssTable)
 }

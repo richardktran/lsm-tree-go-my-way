@@ -1,22 +1,22 @@
-package lsmtree
+package memtable
 
 import (
-	"github.com/richardktran/lsm-tree-go-my-way/internal/algorithm"
 	"github.com/richardktran/lsm-tree-go-my-way/internal/kv"
+	"github.com/richardktran/lsm-tree-go-my-way/internal/memtable/algorithm"
 )
 
 type MemTable struct {
-	sortedData *algorithm.SortedList
+	sortedData algorithm.SortedList
 }
 
 func NewMemTable() *MemTable {
 	return &MemTable{
-		sortedData: algorithm.NewSortedList(),
+		sortedData: algorithm.NewSortedArray(),
 	}
 }
 
-func (m *MemTable) Clone() *MemTable {
-	return &MemTable{
+func (m *MemTable) Clone() MemTable {
+	return MemTable{
 		sortedData: m.sortedData.Clone(),
 	}
 }
@@ -27,7 +27,7 @@ func (m *MemTable) Get(key kv.Key) (kv.Value, bool) {
 }
 
 func (m *MemTable) Set(key kv.Key, value kv.Value) {
-	m.sortedData.Insert(key, value)
+	m.sortedData.Set(key, value)
 }
 
 func (m *MemTable) Delete(key kv.Key) {
@@ -36,4 +36,8 @@ func (m *MemTable) Delete(key kv.Key) {
 
 func (m *MemTable) Size() int {
 	return m.sortedData.Size()
+}
+
+func (m *MemTable) GetAll() []kv.Record {
+	return m.sortedData.GetAll()
 }

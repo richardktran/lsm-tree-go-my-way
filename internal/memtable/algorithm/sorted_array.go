@@ -7,26 +7,29 @@ import (
 	"github.com/richardktran/lsm-tree-go-my-way/internal/kv"
 )
 
-type SortedList struct {
+var _ SortedList = (*SortedArray)(nil)
+
+type SortedArray struct {
 	data []kv.Record
 	size int
 }
 
-func NewSortedList() *SortedList {
-	return &SortedList{
+func NewSortedArray() *SortedArray {
+	return &SortedArray{
 		data: make([]kv.Record, 0),
 		size: 0,
 	}
 }
 
-func (s *SortedList) Clone() *SortedList {
-	newList := NewSortedList()
-	_ = copy(newList.data, s.data)
+func (s *SortedArray) Clone() SortedList {
+	newList := NewSortedArray()
+	newList.data = make([]kv.Record, len(s.data))
+	copy(newList.data, s.data)
 	newList.size = s.size
 	return newList
 }
 
-func (s *SortedList) Insert(key kv.Key, value kv.Value) {
+func (s *SortedArray) Set(key kv.Key, value kv.Value) {
 	_, exists := s.Get(key)
 	if exists {
 		s.Delete(key)
@@ -38,7 +41,7 @@ func (s *SortedList) Insert(key kv.Key, value kv.Value) {
 	log.Println("Size of sorted list: ", s.size)
 }
 
-func (s *SortedList) Get(key kv.Key) (kv.Value, bool) {
+func (s *SortedArray) Get(key kv.Key) (kv.Value, bool) {
 	// binary search for the key
 	low := 0
 	high := len(s.data) - 1
@@ -60,7 +63,7 @@ func (s *SortedList) Get(key kv.Key) (kv.Value, bool) {
 	return "", false
 }
 
-func (s *SortedList) Delete(key kv.Key) {
+func (s *SortedArray) Delete(key kv.Key) {
 	// binary search for the key
 	low := 0
 	high := len(s.data) - 1
@@ -82,12 +85,16 @@ func (s *SortedList) Delete(key kv.Key) {
 	}
 }
 
-func (s *SortedList) Sort() {
+func (s *SortedArray) Sort() {
 	sort.Slice(s.data[:], func(i, j int) bool {
 		return s.data[i].Key < s.data[j].Key
 	})
 }
 
-func (s *SortedList) Size() int {
+func (s *SortedArray) Size() int {
 	return s.size
+}
+
+func (s *SortedArray) GetAll() []kv.Record {
+	return s.data
 }
