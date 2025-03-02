@@ -4,6 +4,7 @@ import (
 	"log"
 
 	"github.com/richardktran/lsm-tree-go-my-way/internal/config"
+	"github.com/richardktran/lsm-tree-go-my-way/internal/kv"
 	"github.com/richardktran/lsm-tree-go-my-way/internal/memtable"
 )
 
@@ -18,7 +19,7 @@ Each file represents a block
 */
 type SSTable struct {
 	level       uint64
-	sparseIndex map[string]int64 // key -> offset
+	sparseIndex map[kv.Key]uint64 // key -> offset
 	blocks      []Block
 	createdAt   uint64 // Unix timestamp
 	config      config.Config
@@ -27,7 +28,7 @@ type SSTable struct {
 func NewSSTable(level uint64, config config.Config) *SSTable {
 	return &SSTable{
 		level:       level,
-		sparseIndex: make(map[string]int64),
+		sparseIndex: make(map[kv.Key]uint64),
 		blocks:      make([]Block, 0),
 		createdAt:   0,
 		config:      config,
@@ -43,7 +44,6 @@ func (s *SSTable) Flush(memtable memtable.MemTable) {
 		return
 	}
 	log.Println("Flushing memtable to SSTable")
-	log.Println("Len of memtable: ", len(memtable.GetAll()))
 	for _, record := range memtable.GetAll() {
 		if block.IsMax(s.config.SSTableBlockSize) {
 			s.blocks = append(s.blocks, *block)
@@ -53,15 +53,19 @@ func (s *SSTable) Flush(memtable memtable.MemTable) {
 				log.Println("Error creating new block: ", err)
 				return
 			}
+
+			s.sparseIndex[record.Key] = baseOffset
 		}
 
-		_, pos, err := block.Add(record)
+		blockLen, pos, err := block.Add(record)
 		if err != nil {
 			log.Println("Error adding record to block: ", err)
 			return
 		}
 
-		baseOffset += uint64(pos)
+		log.Printf("Added record to block at position %d with baseOffset %d and len = %d\n", pos, baseOffset, blockLen)
+
+		baseOffset += uint64(blockLen)
 	}
 
 	s.blocks = append(s.blocks, *block)
