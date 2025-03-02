@@ -1,8 +1,10 @@
 package wal
 
 import (
+	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -17,13 +19,11 @@ type WAL struct {
 }
 
 func NewWAL(walDir string) (*WAL, error) {
-	commitLogPath := walDir + "/wal.log"
-	metaLogPath := walDir + "/wal.meta"
+	commitLogPath := filepath.Join(walDir, "wal.log")
+	metaLogPath := filepath.Join(walDir, "wal.meta")
 
-	_, err := os.Stat(walDir)
-	if os.IsNotExist(err) {
-		err = os.Mkdir(walDir, 0755)
-		if err != nil {
+	if _, err := os.Stat(walDir); os.IsNotExist(err) {
+		if err := os.Mkdir(walDir, 0755); err != nil {
 			return nil, err
 		}
 	}
@@ -38,7 +38,7 @@ func (w *WAL) WriteCommitLog(record kv.Record, timestamp int64) (int, error) {
 	w.commitLogLock.Lock()
 	defer w.commitLogLock.Unlock()
 
-	data := fmt.Appendf(nil, "%s:%s:%d\n", record.Key, record.Value, timestamp)
+	data := fmt.Sprintf("%s:%s:%d\n", record.Key, record.Value, timestamp)
 
 	commitLog, err := os.OpenFile(w.CommitLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
@@ -46,14 +46,14 @@ func (w *WAL) WriteCommitLog(record kv.Record, timestamp int64) (int, error) {
 	}
 	defer commitLog.Close()
 
-	return commitLog.Write(data)
+	return commitLog.Write([]byte(data))
 }
 
 func (w *WAL) WriteMetaLog(timestamp int64) (int, error) {
 	w.metaLogLock.Lock()
 	defer w.metaLogLock.Unlock()
 
-	data := []byte(fmt.Sprintf("%d\n", timestamp))
+	data := fmt.Sprintf("%d\n", timestamp)
 
 	metaLog, err := os.OpenFile(w.MetaLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
@@ -61,7 +61,7 @@ func (w *WAL) WriteMetaLog(timestamp int64) (int, error) {
 	}
 	defer metaLog.Close()
 
-	return metaLog.Write(data)
+	return metaLog.Write([]byte(data))
 }
 
 func (w *WAL) ReadCommitLog() ([]byte, error) {
@@ -93,8 +93,7 @@ func (w *WAL) ReadLastItemFromMetaLog() (int64, error) {
 	}
 
 	var lastTimestamp int64
-	_, err = fmt.Sscanf(lines[len(lines)-1], "%d", &lastTimestamp)
-	if err != nil {
+	if _, err := fmt.Sscanf(lines[len(lines)-1], "%d", &lastTimestamp); err != nil {
 		return 0, err
 	}
 
@@ -105,37 +104,37 @@ func (w *WAL) ReadCommitLogAfterTimestamp(timestamp int64) ([]kv.Record, error) 
 	w.commitLogLock.RLock()
 	defer w.commitLogLock.RUnlock()
 
-	data, err := os.ReadFile(w.CommitLogPath)
+	file, err := os.Open(w.CommitLogPath)
 	if err != nil {
 		return nil, err
 	}
-
-	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-	if len(lines) == 0 {
-		return nil, fmt.Errorf("commit log is empty")
-	}
+	defer file.Close()
 
 	var records []kv.Record
+	scanner := bufio.NewScanner(file)
 
-	for _, line := range lines {
+	for scanner.Scan() {
+		line := scanner.Text()
 		parts := strings.Split(line, ":")
 		if len(parts) != 3 {
 			return nil, fmt.Errorf("invalid commit log format")
 		}
 
 		var ts int64
-		_, err := fmt.Sscanf(parts[2], "%d", &ts)
-		if err != nil {
+		if _, err := fmt.Sscanf(parts[2], "%d", &ts); err != nil {
 			return nil, err
 		}
 
 		if ts > timestamp {
-			parts := strings.Split(line, ":")
 			records = append(records, kv.Record{
 				Key:   kv.Key(parts[0]),
 				Value: kv.Value(parts[1]),
 			})
 		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, err
 	}
 
 	return records, nil
