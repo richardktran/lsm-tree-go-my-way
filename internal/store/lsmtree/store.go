@@ -91,9 +91,22 @@ func (s *LSMTreeStore) Delete(key kv.Key) {
 }
 
 func (s *LSMTreeStore) flushMemTable(memTable memtable.MemTable) {
-	ssTable := sstable.NewSSTable(uint64(len(s.ssTables)), s.config)
+	ssTable := sstable.NewSSTable(uint64(len(s.ssTables)), s.config, s.dirConfig)
 
 	go ssTable.Flush(memTable, s.dirConfig)
 
 	s.ssTables = append(s.ssTables, ssTable)
+}
+
+func (s *LSMTreeStore) Close() error {
+	s.storeLock.Lock()
+	defer s.storeLock.Unlock()
+
+	for _, ssTable := range s.ssTables {
+		if err := ssTable.Close(); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
