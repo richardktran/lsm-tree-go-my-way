@@ -2,6 +2,8 @@ package lsmtree
 
 import (
 	"log"
+	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -25,23 +27,33 @@ type LSMTreeStore struct {
 }
 
 func NewStore(config config.Config, dirConfig config.DirectoryConfig) *LSMTreeStore {
+	tree := &LSMTreeStore{
+		config:    config,
+		ssTables:  make([]*sstable.SSTable, 0),
+		dirConfig: dirConfig,
+	}
+
 	wal, err := wal.NewWAL(dirConfig.WALDir)
 	if err != nil {
 		panic(err)
 	}
+	tree.wal = wal
 
 	memTable, err := memtable.LoadFromWAL(wal)
 	if err != nil {
 		log.Println("Error loading memtable from WAL: ", err)
 	}
 
-	return &LSMTreeStore{
-		memTable:  memTable,
-		config:    config,
-		ssTables:  make([]*sstable.SSTable, 0),
-		wal:       wal,
-		dirConfig: dirConfig,
+	tree.memTable = memTable
+
+	ssTables, err := tree.loadSSTables()
+	if err != nil {
+		log.Println("Error loading SSTables: ", err)
 	}
+
+	tree.ssTables = ssTables
+
+	return tree
 }
 
 func (s *LSMTreeStore) Get(key kv.Key) (kv.Value, bool) {
@@ -109,4 +121,34 @@ func (s *LSMTreeStore) Close() error {
 	}
 
 	return nil
+}
+
+func (s *LSMTreeStore) loadSSTables() ([]*sstable.SSTable, error) {
+	ssTables := make([]*sstable.SSTable, 0)
+	dirs, err := os.ReadDir(s.dirConfig.SSTableDir)
+	if err != nil {
+		return ssTables, err
+	}
+
+	levels := make([]int, 0)
+
+	for _, dir := range dirs {
+		if !dir.IsDir() {
+			continue
+		}
+
+		level, err := strconv.Atoi(dir.Name())
+		if err != nil {
+			continue
+		}
+		levels = append(levels, level)
+	}
+
+	for _, level := range levels {
+		ssTable := sstable.NewSSTable(uint64(level), s.config, s.dirConfig)
+
+		ssTables = append(ssTables, ssTable)
+	}
+
+	return ssTables, nil
 }

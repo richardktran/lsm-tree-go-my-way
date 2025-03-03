@@ -21,7 +21,9 @@ An implementation of Key-Value Store using Log-Structured Merge Tree (LSM Tree) 
 - [x] Build skeleton for `LSM Tree`
 - [x] Implement basic `MemTable` with Sorted Array as underlying data structure
 - [x] Implement `Write Ahead Log (WAL)` and recover the memtable from WAL
-- [ ] Persist the `Sparse Index` to disk in order to recover the Sparse Index in memory
+- [x] Persist the `Sparse Index` to disk in order to recover the Sparse Index in memory
+- [x] Recover from `Write Ahead Sparse Index Log` to `Sparse Index`
+- [ ] Recover `SSTable` from disk by adding `Blocks` information to memory
 - [ ] Enhance `WAL` written by channel to avoid blocking the main thread
 - [ ] Create `SSTable` with each segment 
 - [ ] Complete Flush to `SSTable` of `MemTable`

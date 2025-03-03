@@ -1,10 +1,13 @@
 package sstable
 
 import (
+	"bufio"
 	"fmt"
 	"log"
 	"os"
 	"path"
+	"strconv"
+	"strings"
 
 	"github.com/richardktran/lsm-tree-go-my-way/internal/config"
 	"github.com/richardktran/lsm-tree-go-my-way/internal/kv"
@@ -24,7 +27,6 @@ type SSTable struct {
 	level            uint64
 	sparseIndex      map[kv.Key]uint64 // key -> offset
 	blocks           []Block
-	createdAt        uint64 // Unix timestamp
 	config           config.Config
 	sparseLogFile    *os.File
 	sparseLogChannel chan kv.Record // write-ahead log for SparseIndex
@@ -35,7 +37,6 @@ func NewSSTable(level uint64, config config.Config, dirConfig config.DirectoryCo
 		level:            level,
 		sparseIndex:      make(map[kv.Key]uint64),
 		blocks:           make([]Block, 0),
-		createdAt:        0,
 		config:           config,
 		sparseLogChannel: make(chan kv.Record, config.SparseWALBufferSize),
 	}
@@ -47,6 +48,9 @@ func NewSSTable(level uint64, config config.Config, dirConfig config.DirectoryCo
 	}
 
 	filePath := path.Join(dirConfig.SparseIndexDir, fmt.Sprintf("%d.index", level))
+
+	s.recover(filePath)
+
 	sparseLogFile, err := os.OpenFile(filePath, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
 	if err != nil {
 		log.Println("Error opening sparse index file: ", err)
@@ -58,19 +62,6 @@ func NewSSTable(level uint64, config config.Config, dirConfig config.DirectoryCo
 	go s.writeWAL()
 
 	return s
-
-}
-
-func (s *SSTable) writeWAL() {
-	defer s.sparseLogFile.Close()
-
-	for record := range s.sparseLogChannel {
-		entry := fmt.Sprintf("%s:%d\n", record.Key, s.sparseIndex[record.Key])
-		_, err := s.sparseLogFile.WriteString(entry)
-		if err != nil {
-			log.Println("Error writing to sparse index WAL: ", err)
-		}
-	}
 }
 
 func (s *SSTable) Flush(memtable memtable.MemTable, dirConfig config.DirectoryConfig) {
@@ -113,4 +104,61 @@ func (s *SSTable) Flush(memtable memtable.MemTable, dirConfig config.DirectoryCo
 func (s *SSTable) Close() error {
 	close(s.sparseLogChannel)
 	return s.sparseLogFile.Close()
+}
+
+func (s *SSTable) writeWAL() {
+	defer s.sparseLogFile.Close()
+
+	for record := range s.sparseLogChannel {
+		entry := fmt.Sprintf("%s:%d\n", record.Key, s.sparseIndex[record.Key])
+		_, err := s.sparseLogFile.WriteString(entry)
+		if err != nil {
+			log.Println("Error writing to sparse index WAL: ", err)
+		}
+	}
+}
+
+func (s *SSTable) recover(filePath string) {
+	s.recoverSparseIndex(filePath)
+	// s.recoverBlocks()
+}
+
+func (s *SSTable) recoverSparseIndex(filePath string) {
+	sparseLogFile, err := os.Open(filePath)
+	if err != nil {
+		log.Println("Error opening sparse index file: ", err)
+		return
+	}
+	defer sparseLogFile.Close()
+	scanner := bufio.NewScanner(sparseLogFile)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		log.Println(line)
+		if line == "" {
+			continue
+		}
+
+		parts := strings.Split(line, ":")
+		if len(parts) != 2 {
+			log.Println("Invalid sparse index line: ", line)
+			continue
+		}
+
+		key := kv.Key(parts[0])
+		offset, err := strconv.Atoi(parts[1])
+
+		if err != nil {
+			log.Println("Error parsing offset: ", err)
+			continue
+		}
+
+		s.sparseIndex[key] = uint64(offset)
+	}
+
+}
+
+func (s *SSTable) recoverBlocks() {
+	// TODO: Recover blocks from SSTable files
+	panic("not implemented")
 }
