@@ -35,9 +35,9 @@ func NewSSTable(level uint64, config config.Config) *SSTable {
 	}
 }
 
-func (s *SSTable) Flush(memtable memtable.MemTable) {
+func (s *SSTable) Flush(memtable memtable.MemTable, dirConfig config.DirectoryConfig) {
 	var baseOffset uint64 = 0
-	block, err := NewBlock(s.level, baseOffset)
+	block, err := NewBlock(s.level, baseOffset, dirConfig)
 
 	if err != nil {
 		log.Println("Error creating new block: ", err)
@@ -48,7 +48,7 @@ func (s *SSTable) Flush(memtable memtable.MemTable) {
 		if block.IsMax(s.config.SSTableBlockSize) {
 			s.blocks = append(s.blocks, *block)
 			block.Close()
-			block, err = NewBlock(s.level, baseOffset)
+			block, err = NewBlock(s.level, baseOffset, dirConfig)
 			if err != nil {
 				log.Println("Error creating new block: ", err)
 				return

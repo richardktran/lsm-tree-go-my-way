@@ -1,6 +1,7 @@
 package lsmtree
 
 import (
+	"log"
 	"sync"
 	"time"
 
@@ -20,6 +21,7 @@ type LSMTreeStore struct {
 	memTable  *memtable.MemTable
 	ssTables  []*sstable.SSTable
 	wal       *wal.WAL
+	dirConfig config.DirectoryConfig
 }
 
 func NewStore(config config.Config, dirConfig config.DirectoryConfig) *LSMTreeStore {
@@ -30,14 +32,15 @@ func NewStore(config config.Config, dirConfig config.DirectoryConfig) *LSMTreeSt
 
 	memTable, err := memtable.LoadFromWAL(wal)
 	if err != nil {
-		panic(err)
+		log.Println("Error loading memtable from WAL: ", err)
 	}
 
 	return &LSMTreeStore{
-		memTable: memTable,
-		config:   config,
-		ssTables: make([]*sstable.SSTable, 0),
-		wal:      wal,
+		memTable:  memTable,
+		config:    config,
+		ssTables:  make([]*sstable.SSTable, 0),
+		wal:       wal,
+		dirConfig: dirConfig,
 	}
 }
 
@@ -90,7 +93,7 @@ func (s *LSMTreeStore) Delete(key kv.Key) {
 func (s *LSMTreeStore) flushMemTable(memTable memtable.MemTable) {
 	ssTable := sstable.NewSSTable(uint64(len(s.ssTables)), s.config)
 
-	go ssTable.Flush(memTable)
+	go ssTable.Flush(memTable, s.dirConfig)
 
 	s.ssTables = append(s.ssTables, ssTable)
 }

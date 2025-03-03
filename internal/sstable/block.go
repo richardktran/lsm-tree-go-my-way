@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 
+	"github.com/richardktran/lsm-tree-go-my-way/internal/config"
 	"github.com/richardktran/lsm-tree-go-my-way/internal/kv"
 )
 
@@ -24,12 +25,14 @@ type Block struct {
 	buf        *bufio.Writer
 }
 
-func NewBlock(level, baseOffset uint64) (*Block, error) {
-	file, err := os.OpenFile(
-		path.Join("data", fmt.Sprintf("%d.%d.sst", level, baseOffset)),
-		os.O_CREATE|os.O_RDWR|os.O_APPEND,
-		0644,
-	)
+func NewBlock(level, baseOffset uint64, dirConfig config.DirectoryConfig) (*Block, error) {
+	sstableFolder := path.Join(dirConfig.SSTableDir, fmt.Sprintf("%d", level))
+	if _, err := os.Stat(sstableFolder); os.IsNotExist(err) {
+		os.MkdirAll(sstableFolder, 0755)
+	}
+
+	filePath := path.Join(sstableFolder, fmt.Sprintf("%d.sst", baseOffset))
+	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
 
 	if err != nil {
 		return nil, err

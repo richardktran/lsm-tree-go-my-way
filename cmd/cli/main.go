@@ -28,7 +28,9 @@ func main() {
 	}
 
 	dirConfig := config.DirectoryConfig{
-		WALDir: "wal",
+		WALDir:         "wal",
+		SSTableDir:     "sstables",
+		SparseIndexDir: "wal/indexes",
 	}
 
 	initDirs(appConfig.RootDataDir, &dirConfig)
@@ -78,8 +80,11 @@ func initDirs(rootDir string, dirConfig *config.DirectoryConfig) {
 		os.Mkdir(rootDir, os.ModePerm)
 	}
 
-	dirConfig.WALDir = fmt.Sprintf("%s/%s", rootDir, dirConfig.WALDir)
-	if _, err := os.Stat(dirConfig.WALDir); os.IsNotExist(err) {
-		os.Mkdir(dirConfig.WALDir, os.ModePerm)
+	dirs := []*string{&dirConfig.WALDir, &dirConfig.SSTableDir}
+	for _, dir := range dirs {
+		*dir = fmt.Sprintf("%s/%s", rootDir, *dir)
+		if _, err := os.Stat(*dir); os.IsNotExist(err) {
+			os.Mkdir(*dir, os.ModePerm)
+		}
 	}
 }
