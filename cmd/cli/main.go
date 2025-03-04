@@ -22,18 +22,22 @@ func main() {
 	hostPort := net.JoinHostPort(Host, Port)
 
 	appConfig := config.Config{
-		MemTableSizeThreshold: 60, // bytes
-		SSTableBlockSize:      40, // bytes
+		MemTableSizeThreshold: 30, // bytes
+		SSTableBlockSize:      20, // bytes
+		SparseWALBufferSize:   2,  // records
 		RootDataDir:           "./data",
 	}
 
 	dirConfig := config.DirectoryConfig{
-		WALDir: "wal",
+		WALDir:         "wal",
+		SSTableDir:     "sstables",
+		SparseIndexDir: "sstables/indexes",
 	}
 
 	initDirs(appConfig.RootDataDir, &dirConfig)
 
 	store := lsmtree.NewStore(appConfig, dirConfig)
+	defer store.Close()
 
 	svr := server.NewServer(store, hostPort)
 
@@ -78,8 +82,15 @@ func initDirs(rootDir string, dirConfig *config.DirectoryConfig) {
 		os.Mkdir(rootDir, os.ModePerm)
 	}
 
-	dirConfig.WALDir = fmt.Sprintf("%s/%s", rootDir, dirConfig.WALDir)
-	if _, err := os.Stat(dirConfig.WALDir); os.IsNotExist(err) {
-		os.Mkdir(dirConfig.WALDir, os.ModePerm)
+	dirs := []*string{
+		&dirConfig.WALDir,
+		&dirConfig.SSTableDir,
+		&dirConfig.SparseIndexDir,
+	}
+	for _, dir := range dirs {
+		*dir = fmt.Sprintf("%s/%s", rootDir, *dir)
+		if _, err := os.Stat(*dir); os.IsNotExist(err) {
+			os.Mkdir(*dir, os.ModePerm)
+		}
 	}
 }

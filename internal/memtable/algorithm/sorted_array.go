@@ -1,7 +1,6 @@
 package algorithm
 
 import (
-	"log"
 	"sort"
 
 	"github.com/richardktran/lsm-tree-go-my-way/internal/kv"
@@ -54,7 +53,6 @@ func (s *SortedArray) Set(key kv.Key, value kv.Value) {
 	s.data = append(s.data, kv.Record{Key: key, Value: value})
 	s.size += kv.Record{Key: key, Value: value}.Size()
 	s.Sort()
-	log.Println("Size of sorted list: ", s.size)
 }
 
 func (s *SortedArray) Get(key kv.Key) (kv.Value, bool) {

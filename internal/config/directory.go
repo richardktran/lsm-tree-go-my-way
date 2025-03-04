@@ -1,5 +1,7 @@
 package config
 
 type DirectoryConfig struct {
-	WALDir string
+	WALDir         string
+	SSTableDir     string
+	SparseIndexDir string
 }

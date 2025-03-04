@@ -1,6 +1,8 @@
 package memtable
 
 import (
+	"fmt"
+
 	"github.com/richardktran/lsm-tree-go-my-way/internal/kv"
 	"github.com/richardktran/lsm-tree-go-my-way/internal/memtable/algorithm"
 	"github.com/richardktran/lsm-tree-go-my-way/internal/wal"
@@ -44,18 +46,20 @@ func (m *MemTable) GetAll() []kv.Record {
 }
 
 func LoadFromWAL(wal *wal.WAL) (*MemTable, error) {
+	memTable := NewMemTable()
+
 	lastTimestamp, err := wal.ReadLastItemFromMetaLog()
 	if err != nil {
-		return nil, err
+		return memTable, fmt.Errorf("error reading last timestamp from meta log: %w", err)
 	}
 
 	// Read commit log
 	records, err := wal.ReadCommitLogAfterTimestamp(lastTimestamp)
 	if err != nil {
-		return nil, err
+		return memTable, fmt.Errorf("error reading commit log after timestamp %d: %w", lastTimestamp, err)
 	}
 
-	return &MemTable{
-		sortedData: algorithm.BuildSortedArray(records),
-	}, nil
+	memTable.sortedData = algorithm.BuildSortedArray(records)
+
+	return memTable, nil
 }

@@ -1,4 +1,4 @@
-# lsm-tree-go-my-way
+# LSM-Tree in Golang
 An implementation of Key-Value Store using Log-Structured Merge Tree (LSM Tree) data structure in Golang.
 
 ## Notes
@@ -20,10 +20,14 @@ An implementation of Key-Value Store using Log-Structured Merge Tree (LSM Tree) 
 ## TODO
 - [x] Build skeleton for `LSM Tree`
 - [x] Implement basic `MemTable` with Sorted Array as underlying data structure
-- [] Create `SSTable` with each segment 
-- [] Complete Flush to `SSTable` of `MemTable`
-- [] Handle `Read` operation
-- [] Improve `MemTable` by using `Skip List` as underlying data structure
-- [] Improve Read by `Bloom Filter`
-- [] Implement `Write Ahead Log (WAL)`
-- [] Implement `Compaction`
+- [x] Implement `Write Ahead Log (WAL)` and recover the memtable from WAL
+- [x] Persist the `Sparse Index` to disk in order to recover the Sparse Index in memory
+- [x] Recover from `Write Ahead Sparse Index Log` to `Sparse Index`
+- [x] Should store offset 0 in the Sparse Index when the first key is written to the SSTable
+- [x] Recover `SSTable` from disk by adding `Blocks` information to memory
+- [ ] Enhance `WAL` written by channel to avoid blocking the main thread
+- [ ] Complete Flush to `SSTable` of `MemTable`
+- [ ] Handle `Read` operation
+- [ ] Improve `MemTable` by using `Skip List` as underlying data structure
+- [ ] Improve Read by `Bloom Filter`
+- [ ] Implement `Compaction`
