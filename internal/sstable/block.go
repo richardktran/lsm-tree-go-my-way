@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"time"
 
 	"github.com/richardktran/lsm-tree-go-my-way/internal/config"
 	"github.com/richardktran/lsm-tree-go-my-way/internal/kv"
@@ -23,6 +24,7 @@ type Block struct {
 	file       *os.File
 	baseOffset uint64
 	buf        *bufio.Writer
+	createdAt  int64
 }
 
 func NewBlock(level, baseOffset uint64, dirConfig config.DirectoryConfig) (*Block, error) {
@@ -42,6 +44,7 @@ func NewBlock(level, baseOffset uint64, dirConfig config.DirectoryConfig) (*Bloc
 		file:       file,
 		baseOffset: baseOffset,
 		buf:        bufio.NewWriter(file),
+		createdAt:  time.Now().UnixNano(),
 	}, nil
 }
 

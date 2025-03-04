@@ -6,8 +6,10 @@ import (
 	"log"
 	"os"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/richardktran/lsm-tree-go-my-way/internal/config"
 	"github.com/richardktran/lsm-tree-go-my-way/internal/kv"
@@ -34,6 +36,7 @@ type SSTable struct {
 	dirConfig        config.DirectoryConfig
 	sparseLogFile    *os.File
 	sparseLogChannel chan kv.Record // write-ahead log for SparseIndex
+	CreatedAt        int64
 }
 
 func NewSSTable(level uint64, config config.Config, dirConfig config.DirectoryConfig) *SSTable {
@@ -44,6 +47,7 @@ func NewSSTable(level uint64, config config.Config, dirConfig config.DirectoryCo
 		config:           config,
 		sparseLogChannel: make(chan kv.Record, config.SparseWALBufferSize),
 		dirConfig:        dirConfig,
+		CreatedAt:        time.Now().UnixNano(),
 	}
 
 	folderPath := path.Join(dirConfig.SparseIndexDir)
@@ -109,6 +113,7 @@ func (s *SSTable) Flush(memtable memtable.MemTable, dirConfig config.DirectoryCo
 	}
 
 	s.blocks = append(s.blocks, *block)
+	s.sortBlocks()
 }
 
 func (s *SSTable) Close() error {
@@ -167,6 +172,12 @@ func (s *SSTable) recoverSparseIndex(filePath string) {
 
 }
 
+func (s *SSTable) sortBlocks() {
+	sort.Slice(s.blocks[:], func(i, j int) bool {
+		return s.blocks[i].createdAt < s.blocks[j].createdAt
+	})
+}
+
 func (s *SSTable) recoverBlocks() {
 	blocks := make([]Block, 0)
 
@@ -190,4 +201,5 @@ func (s *SSTable) recoverBlocks() {
 	}
 
 	s.blocks = blocks
+	s.sortBlocks()
 }
