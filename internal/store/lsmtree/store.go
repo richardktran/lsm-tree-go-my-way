@@ -3,6 +3,7 @@ package lsmtree
 import (
 	"log"
 	"os"
+	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -60,7 +61,17 @@ func (s *LSMTreeStore) Get(key kv.Key) (kv.Value, bool) {
 	s.storeLock.RLock()
 	defer s.storeLock.RUnlock()
 
-	return s.memTable.Get(key)
+	if value, found := s.memTable.Get(key); found {
+		return value, true
+	}
+
+	for i := len(s.ssTables) - 1; i >= 0; i-- {
+		if value, found := s.ssTables[i].Get(key); found {
+			return value, true
+		}
+	}
+
+	return "", false
 }
 
 func (s *LSMTreeStore) Set(key kv.Key, value kv.Value) {
@@ -108,6 +119,7 @@ func (s *LSMTreeStore) flushMemTable(memTable memtable.MemTable) {
 	go ssTable.Flush(memTable, s.dirConfig)
 
 	s.ssTables = append(s.ssTables, ssTable)
+	s.sortSSTables()
 }
 
 func (s *LSMTreeStore) Close() error {
@@ -121,6 +133,12 @@ func (s *LSMTreeStore) Close() error {
 	}
 
 	return nil
+}
+
+func (s *LSMTreeStore) sortSSTables() {
+	sort.Slice(s.ssTables[:], func(i, j int) bool {
+		return s.ssTables[i].CreatedAt > s.ssTables[j].CreatedAt
+	})
 }
 
 func (s *LSMTreeStore) loadSSTables() ([]*sstable.SSTable, error) {
@@ -149,6 +167,8 @@ func (s *LSMTreeStore) loadSSTables() ([]*sstable.SSTable, error) {
 
 		ssTables = append(ssTables, ssTable)
 	}
+
+	s.sortSSTables()
 
 	return ssTables, nil
 }

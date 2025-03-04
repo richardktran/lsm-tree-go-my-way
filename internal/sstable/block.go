@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"os"
 	"path"
 
@@ -77,6 +78,52 @@ func (b *Block) Add(record kv.Record) (n uint64, pos uint64, err error) {
 	numberOfByte := 2*lenWidth + keyBytes + valueBytes
 
 	return uint64(numberOfByte), b.baseOffset, nil
+}
+
+func (b *Block) Get(key kv.Key) (kv.Value, bool) {
+	b.buf.Flush()
+
+	_, err := b.file.Seek(0, io.SeekStart)
+	if err != nil {
+		return "", false
+	}
+
+	reader := bufio.NewReader(b.file)
+
+	for {
+		var keyLen uint64
+		err := binary.Read(reader, enc, &keyLen)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return "", false
+		}
+
+		keyData := make([]byte, keyLen)
+		_, err = io.ReadFull(reader, keyData)
+		if err != nil {
+			return "", false
+		}
+
+		var valueLen uint64
+		err = binary.Read(reader, enc, &valueLen)
+		if err != nil {
+			return "", false
+		}
+
+		value := make([]byte, valueLen)
+		_, err = io.ReadFull(reader, value)
+		if err != nil {
+			return "", false
+		}
+
+		if kv.Key(keyData) == key {
+			return kv.Value(value), true
+		}
+	}
+
+	return "", false
 }
 
 func (b *Block) IsMax(threshold uint64) bool {

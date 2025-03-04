@@ -8,6 +8,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/richardktran/lsm-tree-go-my-way/internal/config"
 	"github.com/richardktran/lsm-tree-go-my-way/internal/kv"
@@ -34,6 +35,7 @@ type SSTable struct {
 	dirConfig        config.DirectoryConfig
 	sparseLogFile    *os.File
 	sparseLogChannel chan kv.Record // write-ahead log for SparseIndex
+	CreatedAt        int64
 }
 
 func NewSSTable(level uint64, config config.Config, dirConfig config.DirectoryConfig) *SSTable {
@@ -44,6 +46,7 @@ func NewSSTable(level uint64, config config.Config, dirConfig config.DirectoryCo
 		config:           config,
 		sparseLogChannel: make(chan kv.Record, config.SparseWALBufferSize),
 		dirConfig:        dirConfig,
+		CreatedAt:        time.Now().UnixNano(),
 	}
 
 	folderPath := path.Join(dirConfig.SparseIndexDir)
@@ -67,6 +70,29 @@ func NewSSTable(level uint64, config config.Config, dirConfig config.DirectoryCo
 	go s.writeWAL()
 
 	return s
+}
+
+func (s *SSTable) Get(key kv.Key) (kv.Value, bool) {
+	var closestKey kv.Key
+	for k := range s.sparseIndex {
+		if k <= key {
+			closestKey = k
+		}
+	}
+	startOffset := s.sparseIndex[closestKey]
+
+	for _, block := range s.blocks {
+		if block.baseOffset < startOffset {
+			continue
+		}
+
+		value, found := block.Get(key)
+		if found {
+			return value, true
+		}
+	}
+
+	return "", false
 }
 
 func (s *SSTable) Flush(memtable memtable.MemTable, dirConfig config.DirectoryConfig) {
