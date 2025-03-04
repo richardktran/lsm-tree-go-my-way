@@ -103,7 +103,6 @@ func (s *SSTable) Flush(memtable memtable.MemTable, dirConfig config.DirectoryCo
 		log.Println("Error creating new block: ", err)
 		return
 	}
-	log.Println("Flushing memtable to SSTable")
 	for index, record := range memtable.GetAll() {
 		if block.IsMax(s.config.SSTableBlockSize) {
 			s.blocks = append(s.blocks, *block)
@@ -123,13 +122,11 @@ func (s *SSTable) Flush(memtable memtable.MemTable, dirConfig config.DirectoryCo
 			s.sparseLogChannel <- record
 		}
 
-		blockLen, pos, err := block.Add(record)
+		blockLen, _, err := block.Add(record)
 		if err != nil {
 			log.Println("Error adding record to block: ", err)
 			return
 		}
-
-		log.Printf("Added record to block at position %d with baseOffset %d and len = %d\n", pos, baseOffset, blockLen)
 
 		baseOffset += uint64(blockLen)
 	}
