@@ -16,10 +16,13 @@ import (
 
 /*
 SSTable is a sorted string table
-File name: <layer>.offset.sst
+File name: sstables/<layer>/offset.sst
   - layer: the level of the SSTable
   - offset: the offset of the SSTable in the level
   - sst: SSTable file extension
+
+Sparse Index:
+  - File name: sstables/<layer>/offset.index
 
 Each file represents a block
 */
@@ -28,6 +31,7 @@ type SSTable struct {
 	sparseIndex      map[kv.Key]uint64 // key -> offset
 	blocks           []Block
 	config           config.Config
+	dirConfig        config.DirectoryConfig
 	sparseLogFile    *os.File
 	sparseLogChannel chan kv.Record // write-ahead log for SparseIndex
 }
@@ -39,6 +43,7 @@ func NewSSTable(level uint64, config config.Config, dirConfig config.DirectoryCo
 		blocks:           make([]Block, 0),
 		config:           config,
 		sparseLogChannel: make(chan kv.Record, config.SparseWALBufferSize),
+		dirConfig:        dirConfig,
 	}
 
 	folderPath := path.Join(dirConfig.SparseIndexDir)
@@ -73,7 +78,7 @@ func (s *SSTable) Flush(memtable memtable.MemTable, dirConfig config.DirectoryCo
 		return
 	}
 	log.Println("Flushing memtable to SSTable")
-	for _, record := range memtable.GetAll() {
+	for index, record := range memtable.GetAll() {
 		if block.IsMax(s.config.SSTableBlockSize) {
 			s.blocks = append(s.blocks, *block)
 			block.Close()
@@ -83,6 +88,11 @@ func (s *SSTable) Flush(memtable memtable.MemTable, dirConfig config.DirectoryCo
 				return
 			}
 
+			s.sparseIndex[record.Key] = baseOffset
+			s.sparseLogChannel <- record
+		}
+
+		if index == 0 {
 			s.sparseIndex[record.Key] = baseOffset
 			s.sparseLogChannel <- record
 		}
@@ -120,7 +130,7 @@ func (s *SSTable) writeWAL() {
 
 func (s *SSTable) recover(filePath string) {
 	s.recoverSparseIndex(filePath)
-	// s.recoverBlocks()
+	s.recoverBlocks()
 }
 
 func (s *SSTable) recoverSparseIndex(filePath string) {
@@ -134,7 +144,6 @@ func (s *SSTable) recoverSparseIndex(filePath string) {
 
 	for scanner.Scan() {
 		line := scanner.Text()
-		log.Println(line)
 		if line == "" {
 			continue
 		}
@@ -159,6 +168,26 @@ func (s *SSTable) recoverSparseIndex(filePath string) {
 }
 
 func (s *SSTable) recoverBlocks() {
-	// TODO: Recover blocks from SSTable files
-	panic("not implemented")
+	blocks := make([]Block, 0)
+
+	blockDir := path.Join(s.dirConfig.SSTableDir, fmt.Sprintf("%d", s.level))
+	files, err := os.ReadDir(blockDir)
+	if err != nil {
+		s.blocks = blocks
+		return
+	}
+
+	for _, file := range files {
+		offStr := strings.TrimSuffix(file.Name(), path.Ext(file.Name()))
+		off, _ := strconv.ParseUint(offStr, 10, 64)
+		block, err := NewBlock(s.level, off, s.dirConfig)
+		if err != nil {
+			log.Println("Error creating block: ", err)
+			continue
+		}
+
+		blocks = append(blocks, *block)
+	}
+
+	s.blocks = blocks
 }
