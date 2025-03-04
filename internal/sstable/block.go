@@ -4,9 +4,9 @@ import (
 	"bufio"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"os"
 	"path"
-	"time"
 
 	"github.com/richardktran/lsm-tree-go-my-way/internal/config"
 	"github.com/richardktran/lsm-tree-go-my-way/internal/kv"
@@ -24,7 +24,6 @@ type Block struct {
 	file       *os.File
 	baseOffset uint64
 	buf        *bufio.Writer
-	createdAt  int64
 }
 
 func NewBlock(level, baseOffset uint64, dirConfig config.DirectoryConfig) (*Block, error) {
@@ -44,7 +43,6 @@ func NewBlock(level, baseOffset uint64, dirConfig config.DirectoryConfig) (*Bloc
 		file:       file,
 		baseOffset: baseOffset,
 		buf:        bufio.NewWriter(file),
-		createdAt:  time.Now().UnixNano(),
 	}, nil
 }
 
@@ -80,6 +78,52 @@ func (b *Block) Add(record kv.Record) (n uint64, pos uint64, err error) {
 	numberOfByte := 2*lenWidth + keyBytes + valueBytes
 
 	return uint64(numberOfByte), b.baseOffset, nil
+}
+
+func (b *Block) Get(key kv.Key) (kv.Value, bool) {
+	b.buf.Flush()
+
+	_, err := b.file.Seek(0, io.SeekStart)
+	if err != nil {
+		return "", false
+	}
+
+	reader := bufio.NewReader(b.file)
+
+	for {
+		var keyLen uint64
+		err := binary.Read(reader, enc, &keyLen)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return "", false
+		}
+
+		keyData := make([]byte, keyLen)
+		_, err = io.ReadFull(reader, keyData)
+		if err != nil {
+			return "", false
+		}
+
+		var valueLen uint64
+		err = binary.Read(reader, enc, &valueLen)
+		if err != nil {
+			return "", false
+		}
+
+		value := make([]byte, valueLen)
+		_, err = io.ReadFull(reader, value)
+		if err != nil {
+			return "", false
+		}
+
+		if kv.Key(keyData) == key {
+			return kv.Value(value), true
+		}
+	}
+
+	return "", false
 }
 
 func (b *Block) IsMax(threshold uint64) bool {

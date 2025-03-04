@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 	"path"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -73,6 +72,29 @@ func NewSSTable(level uint64, config config.Config, dirConfig config.DirectoryCo
 	return s
 }
 
+func (s *SSTable) Get(key kv.Key) (kv.Value, bool) {
+	var closestKey kv.Key
+	for k := range s.sparseIndex {
+		if k <= key {
+			closestKey = k
+		}
+	}
+	startOffset := s.sparseIndex[closestKey]
+
+	for _, block := range s.blocks {
+		if block.baseOffset < startOffset {
+			continue
+		}
+
+		value, found := block.Get(key)
+		if found {
+			return value, true
+		}
+	}
+
+	return "", false
+}
+
 func (s *SSTable) Flush(memtable memtable.MemTable, dirConfig config.DirectoryConfig) {
 	var baseOffset uint64 = 0
 	block, err := NewBlock(s.level, baseOffset, dirConfig)
@@ -113,7 +135,6 @@ func (s *SSTable) Flush(memtable memtable.MemTable, dirConfig config.DirectoryCo
 	}
 
 	s.blocks = append(s.blocks, *block)
-	s.sortBlocks()
 }
 
 func (s *SSTable) Close() error {
@@ -172,12 +193,6 @@ func (s *SSTable) recoverSparseIndex(filePath string) {
 
 }
 
-func (s *SSTable) sortBlocks() {
-	sort.Slice(s.blocks[:], func(i, j int) bool {
-		return s.blocks[i].createdAt < s.blocks[j].createdAt
-	})
-}
-
 func (s *SSTable) recoverBlocks() {
 	blocks := make([]Block, 0)
 
@@ -201,5 +216,4 @@ func (s *SSTable) recoverBlocks() {
 	}
 
 	s.blocks = blocks
-	s.sortBlocks()
 }

@@ -61,7 +61,17 @@ func (s *LSMTreeStore) Get(key kv.Key) (kv.Value, bool) {
 	s.storeLock.RLock()
 	defer s.storeLock.RUnlock()
 
-	return s.memTable.Get(key)
+	if value, found := s.memTable.Get(key); found {
+		return value, true
+	}
+
+	for i := len(s.ssTables) - 1; i >= 0; i-- {
+		if value, found := s.ssTables[i].Get(key); found {
+			return value, true
+		}
+	}
+
+	return "", false
 }
 
 func (s *LSMTreeStore) Set(key kv.Key, value kv.Value) {
