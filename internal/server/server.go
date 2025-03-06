@@ -17,6 +17,7 @@ type Server struct {
 	host  string
 }
 
+// NewServer creates a new server instance
 func NewServer(store store.Store, host string) *Server {
 	return &Server{
 		store: store,
@@ -24,6 +25,7 @@ func NewServer(store store.Store, host string) *Server {
 	}
 }
 
+// StartServer opens a listener on the host and starts accepting connections
 func (s *Server) StartServer() {
 	listener, err := net.Listen("tcp", s.host)
 	if err != nil {
@@ -42,6 +44,7 @@ func (s *Server) StartServer() {
 	}
 }
 
+// handleConnection reads the incoming commands from the client and processes them
 func (s *Server) handleConnection(conn net.Conn) {
 	defer conn.Close()
 	scanner := bufio.NewScanner(conn)
@@ -69,6 +72,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 	}
 }
 
+// handleGet handles the GET command
 func (s *Server) handleGet(conn net.Conn, parts []string) {
 	if len(parts) != 2 {
 		fmt.Fprintf(conn, "ERROR: %s command requires exactly 1 argument", constant.GET)
@@ -82,6 +86,7 @@ func (s *Server) handleGet(conn net.Conn, parts []string) {
 	fmt.Fprintf(conn, "%s", val)
 }
 
+// handleSet handles the SET command
 func (s *Server) handleSet(conn net.Conn, parts []string) {
 	if len(parts) != 3 {
 		fmt.Fprintf(conn, "ERROR: %s command requires exactly 2 arguments", constant.SET)
@@ -92,6 +97,7 @@ func (s *Server) handleSet(conn net.Conn, parts []string) {
 	fmt.Fprintf(conn, "OK")
 }
 
+// handleDelete handles the DELETE command
 func (s *Server) handleDelete(conn net.Conn, parts []string) {
 	if len(parts) != 2 {
 		fmt.Fprintf(conn, "ERROR: %s command requires exactly 1 argument", constant.DEL)

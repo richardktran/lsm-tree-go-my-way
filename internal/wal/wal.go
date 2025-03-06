@@ -34,7 +34,7 @@ func NewWAL(walDir string) (*WAL, error) {
 	}, nil
 }
 
-func (w *WAL) WriteCommitLog(record kv.Record, timestamp int64) (int, error) {
+func (w *WAL) WriteCommitLog(record *kv.Record, timestamp *uint64) (int, error) {
 	w.commitLogLock.Lock()
 	defer w.commitLogLock.Unlock()
 
@@ -49,7 +49,7 @@ func (w *WAL) WriteCommitLog(record kv.Record, timestamp int64) (int, error) {
 	return commitLog.Write([]byte(data))
 }
 
-func (w *WAL) WriteMetaLog(timestamp int64) (int, error) {
+func (w *WAL) WriteMetaLog(timestamp *uint64) (int, error) {
 	w.metaLogLock.Lock()
 	defer w.metaLogLock.Unlock()
 

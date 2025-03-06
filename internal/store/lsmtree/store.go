@@ -16,18 +16,20 @@ import (
 	"github.com/richardktran/lsm-tree-go-my-way/internal/wal"
 )
 
+// Ensure LSMTreeStore implements the store.Store interface
 var _ store.Store = (*LSMTreeStore)(nil)
 
 type LSMTreeStore struct {
-	config    config.Config
+	config    *config.Config
+	dirConfig *config.DirectoryConfig
 	storeLock sync.RWMutex
 	memTable  *memtable.MemTable
 	ssTables  []*sstable.SSTable
 	wal       *wal.WAL
-	dirConfig config.DirectoryConfig
 }
 
-func NewStore(config config.Config, dirConfig config.DirectoryConfig) *LSMTreeStore {
+// NewStore creates a new LSMTreeStore instance, initializes the WAL, memTable, and SSTables from disk
+func NewStore(config *config.Config, dirConfig *config.DirectoryConfig) *LSMTreeStore {
 	tree := &LSMTreeStore{
 		config:    config,
 		ssTables:  make([]*sstable.SSTable, 0),
@@ -44,19 +46,18 @@ func NewStore(config config.Config, dirConfig config.DirectoryConfig) *LSMTreeSt
 	if err != nil {
 		log.Println("Error loading memtable from WAL: ", err)
 	}
-
 	tree.memTable = memTable
 
 	ssTables, err := tree.loadSSTables()
 	if err != nil {
 		log.Println("Error loading SSTables: ", err)
 	}
-
 	tree.ssTables = ssTables
 
 	return tree
 }
 
+// Get searches the memTable first then the SSTables
 func (s *LSMTreeStore) Get(key kv.Key) (kv.Value, bool) {
 	s.storeLock.RLock()
 	defer s.storeLock.RUnlock()
@@ -74,19 +75,23 @@ func (s *LSMTreeStore) Get(key kv.Key) (kv.Value, bool) {
 	return "", false
 }
 
+/*
+Set adds a new key-value pair to the memTable. If the memTable is full, it is flushed to disk as an SSTable.
+The memTable is then reset to an empty state. The WAL is also updated with the new record and a meta log.
+*/
 func (s *LSMTreeStore) Set(key kv.Key, value kv.Value) {
 	s.storeLock.Lock()
 	defer s.storeLock.Unlock()
 
-	curTimestamp := time.Now().Unix()
-
+	curTimestamp := uint64(time.Now().Unix())
 	record := kv.Record{
 		Key:   key,
 		Value: value,
 	}
 
+	// Write to WAL
 	if s.wal != nil {
-		if _, err := s.wal.WriteCommitLog(record, curTimestamp); err != nil {
+		if _, err := s.wal.WriteCommitLog(&record, &curTimestamp); err != nil {
 			panic(err)
 		}
 	}
@@ -95,17 +100,21 @@ func (s *LSMTreeStore) Set(key kv.Key, value kv.Value) {
 
 	// Check if memTable is full
 	if s.memTable.Size() >= s.config.MemTableSizeThreshold {
-		s.flushMemTable(s.memTable.Clone())
+		// Flush a clone of the memTable to disk, clone to prevent reading while writing
+		s.flushMemTable(s.memTable.Clone(), &curTimestamp)
 		s.memTable = memtable.NewMemTable()
 
+		// Write meta log in order to recover the memTable from the last flush
 		if s.wal != nil {
-			if _, err := s.wal.WriteMetaLog(curTimestamp); err != nil {
+			if _, err := s.wal.WriteMetaLog(&curTimestamp); err != nil {
 				panic(err)
 			}
 		}
 	}
 }
 
+// Delete removes a key-value pair from the memTable
+// TODO: Will need to implement a tombstone mechanism to handle deletes
 func (s *LSMTreeStore) Delete(key kv.Key) {
 	s.storeLock.Lock()
 	defer s.storeLock.Unlock()
@@ -113,15 +122,7 @@ func (s *LSMTreeStore) Delete(key kv.Key) {
 	s.memTable.Delete(key)
 }
 
-func (s *LSMTreeStore) flushMemTable(memTable memtable.MemTable) {
-	ssTable := sstable.NewSSTable(uint64(len(s.ssTables)), s.config, s.dirConfig)
-
-	go ssTable.Flush(memTable, s.dirConfig)
-
-	s.ssTables = append(s.ssTables, ssTable)
-	s.sortSSTables()
-}
-
+// Close closes the store and all SSTables
 func (s *LSMTreeStore) Close() error {
 	s.storeLock.Lock()
 	defer s.storeLock.Unlock()
@@ -135,12 +136,10 @@ func (s *LSMTreeStore) Close() error {
 	return nil
 }
 
-func (s *LSMTreeStore) sortSSTables() {
-	sort.Slice(s.ssTables[:], func(i, j int) bool {
-		return s.ssTables[i].CreatedAt > s.ssTables[j].CreatedAt
-	})
-}
-
+/*
+loadSSTables loop through the SSTable directory and load all SSTables into memory.
+Add those SSTables to the list of SSTables
+*/
 func (s *LSMTreeStore) loadSSTables() ([]*sstable.SSTable, error) {
 	ssTables := make([]*sstable.SSTable, 0)
 	dirs, err := os.ReadDir(s.dirConfig.SSTableDir)
@@ -148,22 +147,22 @@ func (s *LSMTreeStore) loadSSTables() ([]*sstable.SSTable, error) {
 		return ssTables, err
 	}
 
-	levels := make([]int, 0)
+	ssTableIds := make([]int, 0)
 
 	for _, dir := range dirs {
 		if !dir.IsDir() {
 			continue
 		}
 
-		level, err := strconv.Atoi(dir.Name())
+		ssTableId, err := strconv.Atoi(dir.Name())
 		if err != nil {
 			continue
 		}
-		levels = append(levels, level)
+		ssTableIds = append(ssTableIds, ssTableId)
 	}
 
-	for _, level := range levels {
-		ssTable := sstable.NewSSTable(uint64(level), s.config, s.dirConfig)
+	for _, ssTableId := range ssTableIds {
+		ssTable := sstable.NewSSTable(uint64(ssTableId), s.config, s.dirConfig)
 
 		ssTables = append(ssTables, ssTable)
 	}
@@ -171,4 +170,25 @@ func (s *LSMTreeStore) loadSSTables() ([]*sstable.SSTable, error) {
 	s.sortSSTables()
 
 	return ssTables, nil
+}
+
+/*
+FlushMemTable create a new thread to flush the memTable to disk as an SSTable.
+The memTable is then reset to an empty state to receive new key-value pairs.
+Update the new SSTable to the list of SSTables
+*/
+func (s *LSMTreeStore) flushMemTable(memTable memtable.MemTable, timestamp *uint64) {
+	ssTable := sstable.NewSSTable(*timestamp, s.config, s.dirConfig)
+
+	go ssTable.Flush(memTable, s.dirConfig)
+
+	s.ssTables = append(s.ssTables, ssTable)
+	s.sortSSTables()
+}
+
+// sortSSTables sorts the SSTables by creation time in descending order
+func (s *LSMTreeStore) sortSSTables() {
+	sort.Slice(s.ssTables[:], func(i, j int) bool {
+		return s.ssTables[i].CreatedAt > s.ssTables[j].CreatedAt
+	})
 }
