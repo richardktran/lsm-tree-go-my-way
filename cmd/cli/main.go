@@ -31,10 +31,8 @@ func main() {
 	dirConfig := config.DirectoryConfig{
 		WALDir:         "wal",
 		SSTableDir:     "sstables",
-		SparseIndexDir: "sstables/indexes",
+		SparseIndexDir: "indexes",
 	}
-
-	initDirs(appConfig.RootDataDir, &dirConfig)
 
 	store := lsmtree.NewStore(&appConfig, &dirConfig)
 	defer store.Close()
@@ -81,25 +79,5 @@ func startCLI(hostPort string) {
 		conn.Close()
 
 		fmt.Printf("%s> ", hostPort)
-	}
-}
-
-// initDirs adds the root directory to the beginning of all the directories in the DirectoryConfig
-// and creates the directories if they do not exist.
-func initDirs(rootDir string, dirConfig *config.DirectoryConfig) {
-	if _, err := os.Stat(rootDir); os.IsNotExist(err) {
-		os.Mkdir(rootDir, os.ModePerm)
-	}
-
-	dirs := []*string{
-		&dirConfig.WALDir,
-		&dirConfig.SSTableDir,
-		&dirConfig.SparseIndexDir,
-	}
-	for _, dir := range dirs {
-		*dir = fmt.Sprintf("%s/%s", rootDir, *dir)
-		if _, err := os.Stat(*dir); os.IsNotExist(err) {
-			os.Mkdir(*dir, os.ModePerm)
-		}
 	}
 }

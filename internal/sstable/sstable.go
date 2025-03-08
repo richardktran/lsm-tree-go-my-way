@@ -8,6 +8,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/richardktran/lsm-tree-go-my-way/internal/config"
@@ -21,7 +22,7 @@ Folder name pattern: data/sstables/<id>/**
   - id: the id representing the SSTable
 
 Sparse Index: Store base offset of each block, each key:offset represents the start of a block
-  - Folder name pattern: sstables/indexes/<id>.index
+  - Folder name pattern: indexes/<id>.index
   - File format: <key>:<offset>
   - key: the key of the record
   - offset: the offset of the record in the SSTable file
@@ -44,6 +45,7 @@ type SSTable struct {
 	sparseLogFile    *os.File
 	sparseLogChannel chan kv.Record // write-ahead log for SparseIndex
 	CreatedAt        int64
+	flushWg          sync.WaitGroup
 }
 
 /*
@@ -122,6 +124,9 @@ The base offset of each block is stored in the sparse index.
 Write the record to the sparseLogChannel to persist the sparse index to disk (will be consumed by persistSparseIndex)
 */
 func (s *SSTable) Flush(memtable memtable.MemTable, dirConfig *config.DirectoryConfig) {
+	s.flushWg.Add(1)
+	defer s.flushWg.Done()
+
 	var baseOffset uint64 = 0
 	block, err := NewBlock(s.id, baseOffset, dirConfig)
 
@@ -162,6 +167,7 @@ func (s *SSTable) Flush(memtable memtable.MemTable, dirConfig *config.DirectoryC
 
 // Close closes the sparseLogChannel and the sparse index WAL
 func (s *SSTable) Close() error {
+	s.flushWg.Wait()
 	close(s.sparseLogChannel)
 	return s.sparseLogFile.Close()
 }

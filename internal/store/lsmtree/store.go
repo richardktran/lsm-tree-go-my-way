@@ -1,6 +1,7 @@
 package lsmtree
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"sort"
@@ -30,6 +31,8 @@ type LSMTreeStore struct {
 
 // NewStore creates a new LSMTreeStore instance, initializes the WAL, memTable, and SSTables from disk
 func NewStore(config *config.Config, dirConfig *config.DirectoryConfig) *LSMTreeStore {
+	initDirs(config.RootDataDir, dirConfig)
+
 	tree := &LSMTreeStore{
 		config:    config,
 		ssTables:  make([]*sstable.SSTable, 0),
@@ -134,6 +137,26 @@ func (s *LSMTreeStore) Close() error {
 	}
 
 	return nil
+}
+
+// initDirs adds the root directory to the beginning of all the directories in the DirectoryConfig
+// and creates the directories if they do not exist.
+func initDirs(rootDir string, dirConfig *config.DirectoryConfig) {
+	if _, err := os.Stat(rootDir); os.IsNotExist(err) {
+		os.Mkdir(rootDir, os.ModePerm)
+	}
+
+	dirs := []*string{
+		&dirConfig.WALDir,
+		&dirConfig.SSTableDir,
+		&dirConfig.SparseIndexDir,
+	}
+	for _, dir := range dirs {
+		*dir = fmt.Sprintf("%s/%s", rootDir, *dir)
+		if _, err := os.Stat(*dir); os.IsNotExist(err) {
+			os.Mkdir(*dir, os.ModePerm)
+		}
+	}
 }
 
 /*
