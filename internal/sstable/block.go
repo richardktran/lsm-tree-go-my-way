@@ -23,9 +23,10 @@ const (
 )
 
 type Block struct {
-	file       *os.File
-	baseOffset uint64
-	buf        *bufio.Writer
+	file           *os.File
+	baseOffset     uint64
+	nextItemOffset uint64
+	buf            *bufio.Writer
 }
 
 /*
@@ -46,9 +47,10 @@ func NewBlock(level, baseOffset uint64, dirConfig *config.DirectoryConfig) (*Blo
 	}
 
 	return &Block{
-		file:       file,
-		baseOffset: baseOffset,
-		buf:        bufio.NewWriter(file),
+		file:           file,
+		baseOffset:     baseOffset,
+		nextItemOffset: 0,
+		buf:            bufio.NewWriter(file),
 	}, nil
 }
 
@@ -91,8 +93,9 @@ func (b *Block) Add(record kv.Record) (n uint64, pos uint64, err error) {
 	b.buf.Flush()
 
 	numberOfByte := 2*lenWidth + keyBytes + valueBytes
+	b.nextItemOffset += uint64(numberOfByte)
 
-	return uint64(numberOfByte), b.baseOffset, nil
+	return uint64(numberOfByte), b.nextItemOffset - uint64(numberOfByte), nil
 }
 
 // Get reads from the beginning of the block file and returns the value of the key if found
