@@ -64,9 +64,10 @@ func testGetSetKeyOnStore(t *testing.T, store *LSMTreeStore) {
 	require.Equal(t, kv.Value(""), v)
 }
 
+// TODO: Currently failed because the flush flow is wrong, will fix it later
 func testTriggerFlushToSSTable(t *testing.T, store *LSMTreeStore) {
-	// Threshold is 30 bytes, init with 3 records will not trigger flush
-	for i := 0; i < 3; i++ {
+	// Threshold is 30 bytes, init with 7 records will not trigger flush (each record is 4 bytes)
+	for i := 0; i < 7; i++ {
 		key := kv.Key("k" + strconv.Itoa(i))
 		value := kv.Value("v" + strconv.Itoa(i))
 		store.Set(key, value)
@@ -79,7 +80,7 @@ func testTriggerFlushToSSTable(t *testing.T, store *LSMTreeStore) {
 	require.NoError(t, err)
 	require.Empty(t, sstableDir)
 
-	for i := 3; i < 10; i++ {
+	for i := 7; i < 14; i++ {
 		key := kv.Key("k" + strconv.Itoa(i))
 		value := kv.Value("v" + strconv.Itoa(i))
 		store.Set(key, value)
