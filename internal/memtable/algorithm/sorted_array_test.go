@@ -15,6 +15,7 @@ func TestSortedArray(t *testing.T) {
 		"get size of the list":               testGetSizeOfTheList,
 		"get all with sorted order":          testGetAllWithSortedOrder,
 		"insert a record with the same key":  testInsertRecordWithTheSameKey,
+		"clone the list":                     testCloneTheList,
 	} {
 		t.Run(scenario, func(t *testing.T) {
 			list := NewSortedArray()
@@ -92,6 +93,28 @@ func testInsertRecordWithTheSameKey(t *testing.T, list *SortedArray) {
 	v, found = list.Get(kv.Key("k1"))
 	require.True(t, found)
 	require.Equal(t, kv.Value("v2"), v)
+}
+
+func testCloneTheList(t *testing.T, list *SortedArray) {
+	for i := 0; i < 5; i++ {
+		key := kv.Key("k" + strconv.Itoa(i))
+		value := kv.Value("v" + strconv.Itoa(i))
+		list.Set(key, value)
+	}
+
+	clone := list.Clone()
+	require.Equal(t, list.Size(), clone.Size())
+	require.Equal(t, list.GetAll(), clone.GetAll())
+
+	// check different memory address
+	list.Set(kv.Key("k1"), kv.Value("v2"))
+	currentListValue, found := list.Get(kv.Key("k1"))
+	require.True(t, found)
+	require.Equal(t, kv.Value("v2"), currentListValue)
+
+	clonedValue, found := clone.Get(kv.Key("k1"))
+	require.True(t, found)
+	require.Equal(t, kv.Value("v1"), clonedValue)
 }
 
 func testOrderOfArray(t *testing.T, list *SortedArray) bool {
