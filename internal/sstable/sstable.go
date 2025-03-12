@@ -8,6 +8,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/richardktran/lsm-tree-go-my-way/internal/config"
@@ -17,62 +18,82 @@ import (
 
 /*
 SSTable is a sorted string table
-File name: sstables/<layer>/offset.sst
-  - layer: the level of the SSTable
-  - offset: the offset of the SSTable in the level
-  - sst: SSTable file extension
+Folder name pattern: data/sstables/<id>/**
+  - id: the id representing the SSTable
 
-Sparse Index:
-  - File name: sstables/<layer>/offset.index
+Sparse Index: Store base offset of each block, each key:offset represents the start of a block
+  - Folder name pattern: indexes/<id>.index
+  - File format: <key>:<offset>
+  - key: the key of the record
+  - offset: the offset of the record in the SSTable file
 
-Each file represents a block
+Each SSTable is composed of multiple blocks
+Folder name pattern: data/sstables/<id>/<offset>.sst
+  - offset: the offset of the block in the SSTable file
+  - File format: <keyLen><key><valueLen><value>
+  - keyLen: the length of the key
+  - key: the key of the record
+  - valueLen: the length of the value
+  - value: the value of the record
 */
 type SSTable struct {
-	level            uint64
+	id               uint64
 	sparseIndex      map[kv.Key]uint64 // key -> offset
 	blocks           []Block
 	config           config.Config
-	dirConfig        config.DirectoryConfig
+	dirConfig        *config.DirectoryConfig
 	sparseLogFile    *os.File
 	sparseLogChannel chan kv.Record // write-ahead log for SparseIndex
 	CreatedAt        int64
+	flushWg          sync.WaitGroup
 }
 
-func NewSSTable(level uint64, config config.Config, dirConfig config.DirectoryConfig) *SSTable {
+/*
+NewSSTable creates a new SSTable instance, initializes the sparse index and recovers the blocks
+*/
+func NewSSTable(id uint64, config *config.Config, dirConfig *config.DirectoryConfig) *SSTable {
 	s := &SSTable{
-		level:            level,
+		id:               id,
 		sparseIndex:      make(map[kv.Key]uint64),
 		blocks:           make([]Block, 0),
-		config:           config,
+		config:           *config,
 		sparseLogChannel: make(chan kv.Record, config.SparseWALBufferSize),
 		dirConfig:        dirConfig,
 		CreatedAt:        time.Now().UnixNano(),
 	}
 
-	folderPath := path.Join(dirConfig.SparseIndexDir)
+	sparseIndexFolderPath := path.Join(dirConfig.SparseIndexDir)
 
-	if _, err := os.Stat(folderPath); os.IsNotExist(err) {
+	if _, err := os.Stat(sparseIndexFolderPath); os.IsNotExist(err) {
 		os.MkdirAll(dirConfig.SparseIndexDir, 0755)
 	}
 
-	filePath := path.Join(dirConfig.SparseIndexDir, fmt.Sprintf("%d.index", level))
+	indexFilePath := path.Join(dirConfig.SparseIndexDir, fmt.Sprintf("%d.index", id))
 
-	s.recover(filePath)
+	s.recoverSparseIndex(indexFilePath)
+	s.recoverBlocks()
 
-	sparseLogFile, err := os.OpenFile(filePath, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
+	sparseLogFile, err := os.OpenFile(indexFilePath, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0644)
 	if err != nil {
-		log.Println("Error opening sparse index file: ", err)
 		return s
 	}
 
 	s.sparseLogFile = sparseLogFile
 
-	go s.writeWAL()
+	// Start a goroutine to consume the record from the sparseLogChannel and write to the sparse index WAL
+	go s.persistSparseIndex()
 
 	return s
 }
 
+/*
+Get look up the key in sparse index that closest and <= the key, get the base offset of the block
+From the block, find the key and return the value.
+If the key is not found, find the next block until the key is found.
+If the key is not found in any block, return false
+*/
 func (s *SSTable) Get(key kv.Key) (kv.Value, bool) {
+	// TODO: Implement a binary search to find the block that contains the key
 	var closestKey kv.Key
 	for k := range s.sparseIndex {
 		if k <= key {
@@ -95,9 +116,19 @@ func (s *SSTable) Get(key kv.Key) (kv.Value, bool) {
 	return "", false
 }
 
-func (s *SSTable) Flush(memtable memtable.MemTable, dirConfig config.DirectoryConfig) {
+/*
+Flush get all records from the memtable, add to a block until the block is full.
+When the block is full, write the block to disk and create a new block.
+Each block is added to the SSTable.
+The base offset of each block is stored in the sparse index.
+Write the record to the sparseLogChannel to persist the sparse index to disk (will be consumed by persistSparseIndex)
+*/
+func (s *SSTable) Flush(memtable memtable.MemTable, dirConfig *config.DirectoryConfig) {
+	s.flushWg.Add(1)
+	defer s.flushWg.Done()
+
 	var baseOffset uint64 = 0
-	block, err := NewBlock(s.level, baseOffset, dirConfig)
+	block, err := NewBlock(s.id, baseOffset, dirConfig)
 
 	if err != nil {
 		log.Println("Error creating new block: ", err)
@@ -107,7 +138,7 @@ func (s *SSTable) Flush(memtable memtable.MemTable, dirConfig config.DirectoryCo
 		if block.IsMax(s.config.SSTableBlockSize) {
 			s.blocks = append(s.blocks, *block)
 			block.Close()
-			block, err = NewBlock(s.level, baseOffset, dirConfig)
+			block, err = NewBlock(s.id, baseOffset, dirConfig)
 			if err != nil {
 				log.Println("Error creating new block: ", err)
 				return
@@ -134,12 +165,48 @@ func (s *SSTable) Flush(memtable memtable.MemTable, dirConfig config.DirectoryCo
 	s.blocks = append(s.blocks, *block)
 }
 
+// Close closes the sparseLogChannel and the sparse index WAL
 func (s *SSTable) Close() error {
+	s.flushWg.Wait()
 	close(s.sparseLogChannel)
 	return s.sparseLogFile.Close()
 }
 
-func (s *SSTable) writeWAL() {
+/*
+recoverBlocks reads the SSTable directory and recovers all blocks in memory
+NewBlock is called to create or open the block by id of sstable and offset of block
+Update the blocks list with the recovered blocks in memory
+*/
+func (s *SSTable) recoverBlocks() {
+	blocks := make([]Block, 0)
+
+	blockDir := path.Join(s.dirConfig.SSTableDir, fmt.Sprintf("%d", s.id))
+	files, err := os.ReadDir(blockDir)
+	if err != nil {
+		s.blocks = blocks
+		return
+	}
+
+	for _, file := range files {
+		offStr := strings.TrimSuffix(file.Name(), path.Ext(file.Name()))
+		off, _ := strconv.ParseUint(offStr, 10, 64)
+		block, err := NewBlock(s.id, off, s.dirConfig)
+		if err != nil {
+			log.Println("Error creating block: ", err)
+			continue
+		}
+
+		blocks = append(blocks, *block)
+	}
+
+	s.blocks = blocks
+}
+
+/*
+persistSparseIndex receives records from the sparseLogChannel and writes them to the sparse index WAL
+Whenever a new record is added to the sparseLogChannel, it is written to the sparse index WAL
+*/
+func (s *SSTable) persistSparseIndex() {
 	defer s.sparseLogFile.Close()
 
 	for record := range s.sparseLogChannel {
@@ -151,11 +218,7 @@ func (s *SSTable) writeWAL() {
 	}
 }
 
-func (s *SSTable) recover(filePath string) {
-	s.recoverSparseIndex(filePath)
-	s.recoverBlocks()
-}
-
+// recoverSparseIndex reads the sparse index file and recovers the sparse index map in memory.
 func (s *SSTable) recoverSparseIndex(filePath string) {
 	sparseLogFile, err := os.Open(filePath)
 	if err != nil {
@@ -188,29 +251,4 @@ func (s *SSTable) recoverSparseIndex(filePath string) {
 		s.sparseIndex[key] = uint64(offset)
 	}
 
-}
-
-func (s *SSTable) recoverBlocks() {
-	blocks := make([]Block, 0)
-
-	blockDir := path.Join(s.dirConfig.SSTableDir, fmt.Sprintf("%d", s.level))
-	files, err := os.ReadDir(blockDir)
-	if err != nil {
-		s.blocks = blocks
-		return
-	}
-
-	for _, file := range files {
-		offStr := strings.TrimSuffix(file.Name(), path.Ext(file.Name()))
-		off, _ := strconv.ParseUint(offStr, 10, 64)
-		block, err := NewBlock(s.level, off, s.dirConfig)
-		if err != nil {
-			log.Println("Error creating block: ", err)
-			continue
-		}
-
-		blocks = append(blocks, *block)
-	}
-
-	s.blocks = blocks
 }

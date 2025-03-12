@@ -26,7 +26,11 @@ An implementation of Key-Value Store using Log-Structured Merge Tree (LSM Tree) 
 - [x] Should store offset 0 in the Sparse Index when the first key is written to the SSTable
 - [x] Recover `SSTable` from disk by adding `Blocks` information to memory
 - [x] Handle `Read` operation
-- [ ] Enhance `WAL` written by channel to avoid blocking the main thread
+- [ ] Handle `Delete` operation
+- [ ] Handle the case when read the key that is flushing to SSTable
+- [ ] Enhance `WAL` written by channel to avoid blocking the main thread, 
+- [ ] Avoid overhead when open and close the WAL file for each write or read
+- [ ] Implement `Compaction` to merge multiple SSTables into one SSTable
 - [ ] Complete Flush to `SSTable` of `MemTable`
 - [ ] Improve `MemTable` by using `Skip List` as underlying data structure
 - [ ] Improve Read by `Bloom Filter`

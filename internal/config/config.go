@@ -1,6 +1,8 @@
 package config
 
 type Config struct {
+	Host                  string
+	Port                  string
 	MemTableSizeThreshold int
 	SSTableBlockSize      uint64
 	RootDataDir           string

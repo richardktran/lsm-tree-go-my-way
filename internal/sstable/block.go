@@ -12,21 +12,28 @@ import (
 	"github.com/richardktran/lsm-tree-go-my-way/internal/kv"
 )
 
+// enc is the binary encoding used for writing and reading
 var (
 	enc = binary.BigEndian
 )
 
+// lenWidth is the byte size to represent the length of the key and value
 const (
 	lenWidth = 8
 )
 
 type Block struct {
-	file       *os.File
-	baseOffset uint64
-	buf        *bufio.Writer
+	file           *os.File
+	baseOffset     uint64
+	nextItemOffset uint64
+	buf            *bufio.Writer
 }
 
-func NewBlock(level, baseOffset uint64, dirConfig config.DirectoryConfig) (*Block, error) {
+/*
+NewBlock creates or opens a block file
+From id of sstable and baseOffset, we can identify the block file on disk
+*/
+func NewBlock(level, baseOffset uint64, dirConfig *config.DirectoryConfig) (*Block, error) {
 	sstableFolder := path.Join(dirConfig.SSTableDir, fmt.Sprintf("%d", level))
 	if _, err := os.Stat(sstableFolder); os.IsNotExist(err) {
 		os.MkdirAll(sstableFolder, 0755)
@@ -40,12 +47,22 @@ func NewBlock(level, baseOffset uint64, dirConfig config.DirectoryConfig) (*Bloc
 	}
 
 	return &Block{
-		file:       file,
-		baseOffset: baseOffset,
-		buf:        bufio.NewWriter(file),
+		file:           file,
+		baseOffset:     baseOffset,
+		nextItemOffset: 0,
+		buf:            bufio.NewWriter(file),
 	}, nil
 }
 
+/*
+Add writes a record to the block file with format: <keyLen><key><valueLen><value>
+
+- keyLen: the length of the key
+- key: the key of the record
+- valueLen: the length of the value
+- value: the value of the record
+Number of bytes written to the block file is returned: lenWidth + keyBytes + lenWidth + valueBytes
+*/
 func (b *Block) Add(record kv.Record) (n uint64, pos uint64, err error) {
 	keyLen := uint64(len(record.Key))
 	valueLen := uint64(len(record.Value))
@@ -76,10 +93,12 @@ func (b *Block) Add(record kv.Record) (n uint64, pos uint64, err error) {
 	b.buf.Flush()
 
 	numberOfByte := 2*lenWidth + keyBytes + valueBytes
+	b.nextItemOffset += uint64(numberOfByte)
 
-	return uint64(numberOfByte), b.baseOffset, nil
+	return uint64(numberOfByte), b.nextItemOffset - uint64(numberOfByte), nil
 }
 
+// Get reads from the beginning of the block file and returns the value of the key if found
 func (b *Block) Get(key kv.Key) (kv.Value, bool) {
 	b.buf.Flush()
 
@@ -126,11 +145,13 @@ func (b *Block) Get(key kv.Key) (kv.Value, bool) {
 	return "", false
 }
 
+// IsMax checks if the block file has reached the threshold size, used to determine if a new block is needed
 func (b *Block) IsMax(threshold uint64) bool {
 	stat, _ := b.file.Stat()
 	return stat.Size() >= int64(threshold)
 }
 
+// Close closes the block file
 func (b *Block) Close() error {
 	return b.file.Close()
 }

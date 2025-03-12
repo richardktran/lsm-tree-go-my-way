@@ -19,9 +19,9 @@ const (
 )
 
 func main() {
-	hostPort := net.JoinHostPort(Host, Port)
-
 	appConfig := config.Config{
+		Host:                  Host,
+		Port:                  Port,
 		MemTableSizeThreshold: 30, // bytes
 		SSTableBlockSize:      20, // bytes
 		SparseWALBufferSize:   2,  // records
@@ -31,18 +31,24 @@ func main() {
 	dirConfig := config.DirectoryConfig{
 		WALDir:         "wal",
 		SSTableDir:     "sstables",
-		SparseIndexDir: "sstables/indexes",
+		SparseIndexDir: "indexes",
 	}
 
-	initDirs(appConfig.RootDataDir, &dirConfig)
-
-	store := lsmtree.NewStore(appConfig, dirConfig)
+	store := lsmtree.NewStore(&appConfig, &dirConfig)
 	defer store.Close()
+
+	hostPort := net.JoinHostPort(appConfig.Host, appConfig.Port)
 
 	svr := server.NewServer(store, hostPort)
 
 	go svr.StartServer()
 
+	startCLI(hostPort)
+}
+
+// StartCLI starts the CLI for the user to interact with the server
+// Listen the server response and print it to the console
+func startCLI(hostPort string) {
 	scanner := bufio.NewScanner(os.Stdin)
 	fmt.Println("SLM-Tree Go My Way CLI (type QUIT to exit)")
 	fmt.Printf("%s> ", hostPort)
@@ -73,24 +79,5 @@ func main() {
 		conn.Close()
 
 		fmt.Printf("%s> ", hostPort)
-	}
-
-}
-
-func initDirs(rootDir string, dirConfig *config.DirectoryConfig) {
-	if _, err := os.Stat(rootDir); os.IsNotExist(err) {
-		os.Mkdir(rootDir, os.ModePerm)
-	}
-
-	dirs := []*string{
-		&dirConfig.WALDir,
-		&dirConfig.SSTableDir,
-		&dirConfig.SparseIndexDir,
-	}
-	for _, dir := range dirs {
-		*dir = fmt.Sprintf("%s/%s", rootDir, *dir)
-		if _, err := os.Stat(*dir); os.IsNotExist(err) {
-			os.Mkdir(*dir, os.ModePerm)
-		}
 	}
 }
