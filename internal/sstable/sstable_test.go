@@ -30,9 +30,26 @@ func TestSSTable(t *testing.T) {
 		SSTableBlockSize:    40, // block size is 40 bytes (2 records)
 	}
 
+	sstableId := uint64(1)
+
+	memtable := memtable.NewMemTable()
+	for i := 1; i <= 4; i++ {
+		key := kv.Key("k" + strconv.Itoa(i))
+		value := kv.Value("v" + strconv.Itoa(i))
+		memtable.Set(key, value)
+	}
+
 	testCloseSSTable(t, cfg, dirConfig)
-	testFlushFromMemTableToSSTable(t, cfg, dirConfig)
-	testRecoverStateOfSSTable(t, cfg, dirConfig)
+
+	sstable := NewSSTable(sstableId, cfg, dirConfig)
+	testFlushFromMemTableToSSTable(t, memtable, sstable, cfg, dirConfig)
+
+	sstable.Close()
+
+	sstable = NewSSTable(sstableId, cfg, dirConfig)
+	testRecoverStateOfSSTable(t, sstable, cfg, dirConfig)
+
+	sstable.Close()
 }
 
 func testCloseSSTable(t *testing.T, cfg *config.Config, dirConfig *config.DirectoryConfig) {
@@ -43,20 +60,8 @@ func testCloseSSTable(t *testing.T, cfg *config.Config, dirConfig *config.Direct
 	require.NoError(t, sstable.Close())
 }
 
-func testFlushFromMemTableToSSTable(t *testing.T, cfg *config.Config, dirConfig *config.DirectoryConfig) {
+func testFlushFromMemTableToSSTable(t *testing.T, memtable *memtable.MemTable, sstable *SSTable, cfg *config.Config, dirConfig *config.DirectoryConfig) {
 	t.Helper()
-
-	sstableId := uint64(1)
-
-	memtable := memtable.NewMemTable()
-	for i := 1; i <= 4; i++ {
-		key := kv.Key("k" + strconv.Itoa(i))
-		value := kv.Value("v" + strconv.Itoa(i))
-		memtable.Set(key, value)
-	}
-
-	sstable := NewSSTable(sstableId, cfg, dirConfig)
-	defer sstable.Close()
 
 	sstable.Flush(*memtable)
 
@@ -64,77 +69,41 @@ func testFlushFromMemTableToSSTable(t *testing.T, cfg *config.Config, dirConfig 
 
 	require.Equal(t, 2, len(sstable.blocks)) // 4 records => 2 blocks
 
-	// Check the block files
-	for i := 0; i < 2; i++ {
-		filePath := path.Join(dirConfig.SSTableDir, strconv.Itoa(int(sstableId)), strconv.Itoa(i*int(cfg.SSTableBlockSize))+".sst")
-		_, err := os.Stat(filePath)
-		require.NoError(t, err)
-	}
-
-	// Check index file
-	indexFilePath := path.Join(dirConfig.SparseIndexDir, strconv.Itoa(int(sstableId))+".index")
-	_, err := os.Stat(indexFilePath)
-	require.NoError(t, err)
-
-	// Check the sparse index
-	require.Equal(t, 2, len(sstable.sparseIndex)) // k1:0, k3:40
-	require.Equal(t, uint64(0), sstable.sparseIndex[kv.Key("k1")])
-	require.Equal(t, uint64(40), sstable.sparseIndex[kv.Key("k3")])
-
-	// Check content of the index file
-	indexFile, err := os.Open(indexFilePath)
-	require.NoError(t, err)
-	defer indexFile.Close()
-
-	scanner := bufio.NewScanner(indexFile)
-	result := make(map[string]uint64)
-	for scanner.Scan() {
-		line := scanner.Text()
-		require.NotEmpty(t, line)
-
-		parts := strings.Split(line, ":")
-		require.Equal(t, 2, len(parts))
-
-		key := parts[0]
-		offset, err := strconv.Atoi(parts[1])
-		require.NoError(t, err)
-
-		result[key] = uint64(offset)
-	}
-
-	require.Equal(t, 2, len(result))
-	require.Equal(t, uint64(0), result["k1"])
-	require.Equal(t, uint64(40), result["k3"])
+	checkSSTableFiles(t, sstable.id, cfg, dirConfig)
+	checkSparseIndex(t, sstable, map[string]uint64{"k1": 0, "k3": 40})
 }
 
-func testRecoverStateOfSSTable(t *testing.T, cfg *config.Config, dirConfig *config.DirectoryConfig) {
-	sstableId := uint64(1)
-	sstable := NewSSTable(sstableId, cfg, dirConfig)
-	defer sstable.Close()
+func testRecoverStateOfSSTable(t *testing.T, sstable *SSTable, cfg *config.Config, dirConfig *config.DirectoryConfig) {
+	sstableId := sstable.id
 
 	// Sleep to make sure blocks and index are recovered
 	time.Sleep(2 * time.Second)
 
 	require.Equal(t, 2, len(sstable.blocks)) // 4 records => 2 blocks
 
-	// Check the block files
+	checkSSTableFiles(t, sstableId, cfg, dirConfig)
+	checkSparseIndex(t, sstable, map[string]uint64{"k1": 0, "k3": 40})
+}
+
+func checkSSTableFiles(t *testing.T, sstableId uint64, cfg *config.Config, dirConfig *config.DirectoryConfig) {
 	for i := 0; i < 2; i++ {
 		filePath := path.Join(dirConfig.SSTableDir, strconv.Itoa(int(sstableId)), strconv.Itoa(i*int(cfg.SSTableBlockSize))+".sst")
 		_, err := os.Stat(filePath)
 		require.NoError(t, err)
 	}
 
-	// Check index file
 	indexFilePath := path.Join(dirConfig.SparseIndexDir, strconv.Itoa(int(sstableId))+".index")
 	_, err := os.Stat(indexFilePath)
 	require.NoError(t, err)
+}
 
-	// Check the sparse index
-	require.Equal(t, 2, len(sstable.sparseIndex)) // k1:0, k3:40
-	require.Equal(t, uint64(0), sstable.sparseIndex[kv.Key("k1")])
-	require.Equal(t, uint64(40), sstable.sparseIndex[kv.Key("k3")])
+func checkSparseIndex(t *testing.T, sstable *SSTable, expected map[string]uint64) {
+	require.Equal(t, len(expected), len(sstable.sparseIndex))
+	for key, offset := range expected {
+		require.Equal(t, offset, sstable.sparseIndex[kv.Key(key)])
+	}
 
-	// Check content of the index file
+	indexFilePath := path.Join(sstable.dirConfig.SparseIndexDir, strconv.Itoa(int(sstable.id))+".index")
 	indexFile, err := os.Open(indexFilePath)
 	require.NoError(t, err)
 	defer indexFile.Close()
@@ -155,7 +124,8 @@ func testRecoverStateOfSSTable(t *testing.T, cfg *config.Config, dirConfig *conf
 		result[key] = uint64(offset)
 	}
 
-	require.Equal(t, 2, len(result))
-	require.Equal(t, uint64(0), result["k1"])
-	require.Equal(t, uint64(40), result["k3"])
+	require.Equal(t, len(expected), len(result))
+	for key, offset := range expected {
+		require.Equal(t, offset, result[key])
+	}
 }
