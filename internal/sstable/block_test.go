@@ -18,17 +18,17 @@ func TestBlock(t *testing.T) {
 	defer os.RemoveAll(d)
 
 	dirConfig := &config.DirectoryConfig{
-		SSTableDir: d + "sstable",
+		SSTableDir: d + "/sstable",
 	}
-	level := uint64(1)
+	sstableId := uint64(1)
 	baseOffset := uint64(0)
 
-	block, err := NewBlock(level, baseOffset, dirConfig)
+	block, err := NewBlock(sstableId, baseOffset, dirConfig)
 
 	require.NoError(t, err)
 	require.NotNil(t, block)
 
-	sstableFolder := path.Join(dirConfig.SSTableDir, fmt.Sprintf("%d", level))
+	sstableFolder := path.Join(dirConfig.SSTableDir, fmt.Sprintf("%d", sstableId))
 
 	filePath := path.Join(sstableFolder, fmt.Sprintf("%d.sst", baseOffset))
 	_, err = os.Stat(filePath)

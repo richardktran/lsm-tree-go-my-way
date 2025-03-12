@@ -123,12 +123,12 @@ Each block is added to the SSTable.
 The base offset of each block is stored in the sparse index.
 Write the record to the sparseLogChannel to persist the sparse index to disk (will be consumed by persistSparseIndex)
 */
-func (s *SSTable) Flush(memtable memtable.MemTable, dirConfig *config.DirectoryConfig) {
+func (s *SSTable) Flush(memtable memtable.MemTable) {
 	s.flushWg.Add(1)
 	defer s.flushWg.Done()
 
 	var baseOffset uint64 = 0
-	block, err := NewBlock(s.id, baseOffset, dirConfig)
+	block, err := NewBlock(s.id, baseOffset, s.dirConfig)
 
 	if err != nil {
 		log.Println("Error creating new block: ", err)
@@ -138,7 +138,7 @@ func (s *SSTable) Flush(memtable memtable.MemTable, dirConfig *config.DirectoryC
 		if block.IsMax(s.config.SSTableBlockSize) {
 			s.blocks = append(s.blocks, *block)
 			block.Close()
-			block, err = NewBlock(s.id, baseOffset, dirConfig)
+			block, err = NewBlock(s.id, baseOffset, s.dirConfig)
 			if err != nil {
 				log.Println("Error creating new block: ", err)
 				return
