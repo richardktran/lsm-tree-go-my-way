@@ -33,8 +33,8 @@ type Block struct {
 NewBlock creates or opens a block file
 From id of sstable and baseOffset, we can identify the block file on disk
 */
-func NewBlock(level, baseOffset uint64, dirConfig *config.DirectoryConfig) (*Block, error) {
-	sstableFolder := path.Join(dirConfig.SSTableDir, fmt.Sprintf("%d", level))
+func NewBlock(sstableId, baseOffset uint64, dirConfig *config.DirectoryConfig) (*Block, error) {
+	sstableFolder := path.Join(dirConfig.SSTableDir, fmt.Sprintf("%d", sstableId))
 	if _, err := os.Stat(sstableFolder); os.IsNotExist(err) {
 		os.MkdirAll(sstableFolder, 0755)
 	}

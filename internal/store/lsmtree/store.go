@@ -203,7 +203,7 @@ Update the new SSTable to the list of SSTables
 func (s *LSMTreeStore) flushMemTable(memTable memtable.MemTable, timestamp *uint64) {
 	ssTable := sstable.NewSSTable(*timestamp, s.config, s.dirConfig)
 
-	go ssTable.Flush(memTable, s.dirConfig)
+	go ssTable.Flush(memTable)
 
 	s.ssTables = append(s.ssTables, ssTable)
 	s.sortSSTables()
