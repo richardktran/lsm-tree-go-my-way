@@ -6,6 +6,8 @@ An implementation of Key-Value Store using Log-Structured Merge Tree (LSM Tree) 
 
 Log-Structured Merge Trees (LSM Trees) are a data structure typically used in databases and file systems to manage large volumes of data. They are designed to provide high write throughput by batching writes and periodically merging them into larger structures. This implementation provides a simple key-value store using LSM Trees in Golang.
 
+To know more about LSM Trees, you can read my article here: [LSM Tree - The Lazy Genius Behind the Power of NoSQL](https://open.substack.com/pub/richardktran/p/lsm-tree-the-lazy-genius-behind-the).
+
 ## Installation
 
 To install this project, you need to have Golang installed on your machine. You can download and install Golang from [here](https://golang.org/dl/).
