@@ -1,7 +1,9 @@
 package sstable
 
 import (
+	"fmt"
 	"os"
+	"path"
 	"strconv"
 	"testing"
 
@@ -15,12 +17,22 @@ func TestBlock(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(d)
 
-	block, err := NewBlock(1, 0, &config.DirectoryConfig{
+	dirConfig := &config.DirectoryConfig{
 		SSTableDir: d + "sstable",
-	})
+	}
+	level := uint64(1)
+	baseOffset := uint64(0)
+
+	block, err := NewBlock(level, baseOffset, dirConfig)
 
 	require.NoError(t, err)
 	require.NotNil(t, block)
+
+	sstableFolder := path.Join(dirConfig.SSTableDir, fmt.Sprintf("%d", level))
+
+	filePath := path.Join(sstableFolder, fmt.Sprintf("%d.sst", baseOffset))
+	_, err = os.Stat(filePath)
+	require.NoError(t, err)
 
 	// Add a record to the block
 	addRecord(t, block)
@@ -30,6 +42,11 @@ func TestBlock(t *testing.T) {
 
 	// Close the block
 	require.NoError(t, block.Close())
+
+	// Check size of the block file
+	fileInfo, err := os.Stat(filePath)
+	require.NoError(t, err)
+	require.Equal(t, int64(120), fileInfo.Size())
 }
 
 func addRecord(t *testing.T, block *Block) {
