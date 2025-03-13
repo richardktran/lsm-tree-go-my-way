@@ -74,7 +74,7 @@ func (s *SortedArray) Get(key kv.Key) (kv.Value, bool) {
 		}
 	}
 
-	return "", false
+	return kv.Value(""), false
 }
 
 func (s *SortedArray) Delete(key kv.Key) {

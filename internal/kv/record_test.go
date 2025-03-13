@@ -16,7 +16,7 @@ func TestRecordSize(t *testing.T) {
 			name: "Empty key and value",
 			record: Record{
 				Key:   "",
-				Value: "",
+				Value: Value(""),
 			},
 			expected: 0,
 		},
@@ -24,7 +24,7 @@ func TestRecordSize(t *testing.T) {
 			name: "Non-empty key and value",
 			record: Record{
 				Key:   "key",
-				Value: "value",
+				Value: Value("value"),
 			},
 			expected: 8,
 		},
@@ -32,7 +32,7 @@ func TestRecordSize(t *testing.T) {
 			name: "Long key and value",
 			record: Record{
 				Key:   "longerkey",
-				Value: "longervalue",
+				Value: Value("longervalue"),
 			},
 			expected: 20,
 		},
@@ -40,7 +40,7 @@ func TestRecordSize(t *testing.T) {
 			name: "Key only",
 			record: Record{
 				Key:   "justkeyonly",
-				Value: "",
+				Value: Value(""),
 			},
 			expected: 11,
 		},
@@ -48,7 +48,7 @@ func TestRecordSize(t *testing.T) {
 			name: "Value only",
 			record: Record{
 				Key:   "",
-				Value: "valueonly",
+				Value: Value("valueonly"),
 			},
 			expected: 9,
 		},

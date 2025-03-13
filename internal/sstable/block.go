@@ -104,7 +104,7 @@ func (b *Block) Get(key kv.Key) (kv.Value, bool) {
 
 	_, err := b.file.Seek(0, io.SeekStart)
 	if err != nil {
-		return "", false
+		return kv.Value(""), false
 	}
 
 	reader := bufio.NewReader(b.file)
@@ -116,33 +116,37 @@ func (b *Block) Get(key kv.Key) (kv.Value, bool) {
 			break
 		}
 		if err != nil {
-			return "", false
+			return kv.Value(""), false
 		}
 
 		keyData := make([]byte, keyLen)
 		_, err = io.ReadFull(reader, keyData)
 		if err != nil {
-			return "", false
+			return kv.Value(""), false
 		}
 
 		var valueLen uint64
 		err = binary.Read(reader, enc, &valueLen)
 		if err != nil {
-			return "", false
+			return kv.Value(""), false
 		}
 
 		value := make([]byte, valueLen)
 		_, err = io.ReadFull(reader, value)
 		if err != nil {
-			return "", false
+			return kv.Value(""), false
 		}
 
 		if kv.Key(keyData) == key {
+			if valueLen == 0 {
+				return kv.Value(""), false
+			}
+
 			return kv.Value(value), true
 		}
 	}
 
-	return "", false
+	return kv.Value(""), false
 }
 
 // IsMax checks if the block file has reached the threshold size, used to determine if a new block is needed
