@@ -75,7 +75,7 @@ func (s *LSMTreeStore) Get(key kv.Key) (kv.Value, bool) {
 		}
 	}
 
-	return "", false
+	return kv.Value(""), false
 }
 
 /*

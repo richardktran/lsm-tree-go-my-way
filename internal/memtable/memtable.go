@@ -25,6 +25,9 @@ func (m *MemTable) Clone() MemTable {
 }
 
 func (m *MemTable) Get(key kv.Key) (kv.Value, bool) {
+	if val, _ := m.sortedData.Get(key); val == nil {
+		return kv.Value(""), false
+	}
 
 	return m.sortedData.Get(key)
 }
@@ -34,7 +37,7 @@ func (m *MemTable) Set(key kv.Key, value kv.Value) {
 }
 
 func (m *MemTable) Delete(key kv.Key) {
-	m.sortedData.Delete(key)
+	m.sortedData.Set(key, nil) // nil value indicates tombstone
 }
 
 func (m *MemTable) Size() int {
@@ -42,7 +45,17 @@ func (m *MemTable) Size() int {
 }
 
 func (m *MemTable) GetAll() []kv.Record {
-	return m.sortedData.GetAll()
+	allData := m.sortedData.GetAll()
+
+	// Filter out tombstones
+	var records []kv.Record
+	for _, record := range allData {
+		if record.Value != nil {
+			records = append(records, record)
+		}
+	}
+
+	return records
 }
 
 func LoadFromWAL(wal *wal.WAL) (*MemTable, error) {

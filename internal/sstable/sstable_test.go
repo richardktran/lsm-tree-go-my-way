@@ -49,6 +49,8 @@ func TestSSTable(t *testing.T) {
 	sstable = NewSSTable(sstableId, cfg, dirConfig)
 	testRecoverStateOfSSTable(t, sstable, cfg, dirConfig)
 
+	testFindADeletedKey(t, d)
+
 	sstable.Close()
 }
 
@@ -83,6 +85,43 @@ func testRecoverStateOfSSTable(t *testing.T, sstable *SSTable, cfg *config.Confi
 
 	checkSSTableFiles(t, sstableId, cfg, dirConfig)
 	checkSparseIndex(t, sstable, map[string]uint64{"k1": 0, "k3": 40})
+}
+
+func testFindADeletedKey(t *testing.T, rootDir string) {
+	dirConfig := &config.DirectoryConfig{
+		SSTableDir:     rootDir + "/sstable",
+		WALDir:         rootDir + "/wal",
+		SparseIndexDir: rootDir + "/indexes",
+	}
+	cfg := &config.Config{
+		SparseWALBufferSize: 2,
+		SSTableBlockSize:    40, // block size is 40 bytes (2 records)
+	}
+
+	sstableId := uint64(1)
+
+	memtable := memtable.NewMemTable()
+	for i := 1; i <= 4; i++ {
+		key := kv.Key("k" + strconv.Itoa(i))
+		value := kv.Value("v" + strconv.Itoa(i))
+		memtable.Set(key, value)
+	}
+
+	key := kv.Key("k2")
+	value := kv.Value("")
+	memtable.Set(key, value)
+
+	sstable := NewSSTable(sstableId, cfg, dirConfig)
+	defer sstable.Close()
+
+	sstable.Flush(*memtable)
+
+	time.Sleep(2 * time.Second)
+
+	// read k2 from sstable
+	v, found := sstable.Get(key)
+	require.False(t, found)
+	require.Equal(t, value, v)
 }
 
 func checkSSTableFiles(t *testing.T, sstableId uint64, cfg *config.Config, dirConfig *config.DirectoryConfig) {

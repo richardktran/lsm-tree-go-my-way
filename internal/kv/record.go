@@ -2,7 +2,7 @@ package kv
 
 type Key string
 
-type Value string
+type Value []byte
 
 type Record struct {
 	Key   Key   `json:"key"`
