@@ -119,10 +119,7 @@ func (s *LSMTreeStore) Set(key kv.Key, value kv.Value) {
 // Delete removes a key-value pair from the memTable
 // TODO: Will need to implement a tombstone mechanism to handle deletes
 func (s *LSMTreeStore) Delete(key kv.Key) {
-	s.storeLock.Lock()
-	defer s.storeLock.Unlock()
-
-	s.memTable.Delete(key)
+	s.Set(key, nil)
 }
 
 // Close closes the store and all SSTables

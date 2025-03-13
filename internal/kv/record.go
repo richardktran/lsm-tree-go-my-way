@@ -14,3 +14,7 @@ type Record struct {
 func (r Record) Size() int {
 	return len(r.Key) + len(r.Value)
 }
+
+func (r Record) IsDeletedRecord() bool {
+	return r.Value == nil
+}

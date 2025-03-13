@@ -61,10 +61,7 @@ func (m *MemTable) GetAll() []kv.Record {
 func LoadFromWAL(wal *wal.WAL) (*MemTable, error) {
 	memTable := NewMemTable()
 
-	lastTimestamp, err := wal.ReadLastItemFromMetaLog()
-	if err != nil {
-		return memTable, fmt.Errorf("error reading last timestamp from meta log: %w", err)
-	}
+	lastTimestamp, _ := wal.ReadLastItemFromMetaLog()
 
 	// Read commit log
 	records, err := wal.ReadCommitLogAfterTimestamp(lastTimestamp)
@@ -72,7 +69,9 @@ func LoadFromWAL(wal *wal.WAL) (*MemTable, error) {
 		return memTable, fmt.Errorf("error reading commit log after timestamp %d: %w", lastTimestamp, err)
 	}
 
-	memTable.sortedData = algorithm.BuildSortedArray(records)
+	if len(records) > 0 {
+		memTable.sortedData = algorithm.BuildSortedArray(records)
+	}
 
 	return memTable, nil
 }

@@ -37,7 +37,7 @@ At the prompt, you can use the following commands:
 
 - `SET <key> <value>`: Insert a key-value pair
 - `GET <key>`: Retrieve the value for a given key
-- `DELETE <key>`: Delete a key-value pair
+- `DEL <key>`: Delete a key-value pair
 
 Example:
 
@@ -45,9 +45,9 @@ Example:
 > SET key1 value1
 > GET key1
 value1
-> DELETE key1
+> DEL key1
 > GET key1
-Key not found
+(nil)
 ```
 
 ## Personal Notes
