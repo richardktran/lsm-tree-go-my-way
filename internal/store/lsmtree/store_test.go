@@ -110,6 +110,6 @@ func testDeleteKeyOnStore(t *testing.T, store *LSMTreeStore) {
 	require.False(t, found)
 	require.Equal(t, kv.Value(""), v)
 
-	// TODO: Delete after flush to SSTable
 	// TODO: Test delete after recovery from WAL
+	// TODO: Delete after flush to SSTable, SHOULD NOT still get value after flush to sstable but delete in memtable
 }
