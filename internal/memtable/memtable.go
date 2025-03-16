@@ -26,7 +26,7 @@ func (m *MemTable) Clone() MemTable {
 
 func (m *MemTable) Get(key kv.Key) (kv.Value, bool) {
 	if val, _ := m.sortedData.Get(key); val == nil {
-		return kv.Value(""), false
+		return kv.Value(""), true
 	}
 
 	return m.sortedData.Get(key)
