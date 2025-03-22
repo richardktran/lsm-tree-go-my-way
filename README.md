@@ -75,7 +75,7 @@ value1
 - [x] Recover `SSTable` from disk by adding `Blocks` information to memory
 - [x] Handle `Read` operation
 - [x] Handle `Delete` operation
-- [ ] Handle the case when read the key that is flushing to SSTable
+- [x] Handle the case when read the key that is flushing to SSTable
 - [ ] Enhance `WAL` written by channel to avoid blocking the main thread, 
 - [ ] Avoid overhead when open and close the WAL file for each write or read
 - [ ] Implement `Compaction` to merge multiple SSTables into one SSTable
