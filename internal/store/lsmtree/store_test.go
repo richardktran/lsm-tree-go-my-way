@@ -12,9 +12,10 @@ import (
 
 func TestLSMTreeStore(t *testing.T) {
 	for scenario, fn := range map[string]func(t *testing.T, store *LSMTreeStore){
-		"Set/Get key on Store":           testGetSetKeyOnStore,
-		"Check trigger flush to SSTable": testTriggerFlushToSSTable,
-		"Test Delete key on Store":       testDeleteKeyOnStore,
+		"Set/Get key on Store":             testGetSetKeyOnStore,
+		"Check trigger flush to SSTable":   testTriggerFlushToSSTable,
+		"Test Delete key on Store":         testDeleteKeyOnStore,
+		"Read data is flushing to SSTable": testReadDataFlushingToSSTable,
 	} {
 		t.Run(scenario, func(t *testing.T) {
 			dir, err := os.MkdirTemp("", "server-test")
@@ -65,7 +66,6 @@ func testGetSetKeyOnStore(t *testing.T, store *LSMTreeStore) {
 	require.Equal(t, kv.Value(""), v)
 }
 
-// TODO: Currently failed because the flush flow is wrong, will fix it later
 func testTriggerFlushToSSTable(t *testing.T, store *LSMTreeStore) {
 	// Threshold is 30 bytes, init with 7 records will not trigger flush (each record is 4 bytes)
 	for i := 0; i < 7; i++ {
@@ -93,6 +93,28 @@ func testTriggerFlushToSSTable(t *testing.T, store *LSMTreeStore) {
 	sstableDir, err = os.ReadDir(store.dirConfig.SSTableDir)
 	require.NoError(t, err)
 	require.NotEmpty(t, sstableDir)
+}
+
+func testReadDataFlushingToSSTable(t *testing.T, store *LSMTreeStore) {
+	// Threshold is 30 bytes, init with 7 records will not trigger flush (each record is 4 bytes)
+	for i := 0; i < 7; i++ {
+		key := kv.Key("k" + strconv.Itoa(i))
+		value := kv.Value("v" + strconv.Itoa(i))
+		store.Set(key, value)
+		v, found := store.Get(key)
+		require.True(t, found)
+		require.Equal(t, value, v)
+	}
+
+	// Trigger flush to SSTable
+	key := kv.Key("k7")
+	value := kv.Value("v7")
+	store.Set(key, value)
+
+	// Read data is flushing to SSTable
+	v, found := store.Get(kv.Key("k5"))
+	require.True(t, found)
+	require.Equal(t, kv.Value("v5"), v)
 }
 
 func testDeleteKeyOnStore(t *testing.T, store *LSMTreeStore) {

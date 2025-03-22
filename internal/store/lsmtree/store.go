@@ -102,10 +102,8 @@ func (s *LSMTreeStore) Set(key kv.Key, value kv.Value) {
 		}
 	}
 
-	s.memTable.Set(key, value)
-
 	// Check if memTable is full
-	if s.memTable.Size() >= s.config.MemTableSizeThreshold {
+	if s.memTable.Size()+record.Size() >= s.config.MemTableSizeThreshold {
 		// Flush a clone of the memTable to disk, clone to prevent reading while writing
 		s.flushMemTable(s.memTable.Clone(), &curTimestamp)
 		s.memTable = memtable.NewMemTable()
@@ -117,6 +115,8 @@ func (s *LSMTreeStore) Set(key kv.Key, value kv.Value) {
 			}
 		}
 	}
+
+	s.memTable.Set(key, value)
 }
 
 // Delete removes a key-value pair by insert a tombstone record into the memTable

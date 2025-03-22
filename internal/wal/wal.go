@@ -106,7 +106,7 @@ func (w *WAL) ReadCommitLogAfterTimestamp(timestamp int64) ([]kv.Record, error) 
 
 	file, err := os.Open(w.CommitLogPath)
 	if err != nil {
-		return nil, err
+		return []kv.Record{}, err
 	}
 	defer file.Close()
 
@@ -125,7 +125,7 @@ func (w *WAL) ReadCommitLogAfterTimestamp(timestamp int64) ([]kv.Record, error) 
 			return nil, err
 		}
 
-		if ts > timestamp {
+		if ts >= timestamp {
 			if parts[1] == "" {
 				// delete key if value is empty
 				record := kv.Record{
