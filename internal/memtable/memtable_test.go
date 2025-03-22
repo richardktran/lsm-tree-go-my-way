@@ -10,8 +10,8 @@ import (
 
 func TestMemtable(t *testing.T) {
 	for scenario, fn := range map[string]func(t *testing.T, table *MemTable){
-		"get/set key (value)":               testGetSetKeyOn,
-		"delete key":                        testDeleteKeyOn,
+		"get/set key (value)":               testGetSetKeyRecord,
+		"delete key":                        testDeleteRecordByKey,
 		"get size of the list":              testGetSizeOfTheList,
 		"get all with sorted order":         testGetAllWithSortedOrder,
 		"insert a record with the same key": testInsertRecordWithTheSameKey,
@@ -24,7 +24,7 @@ func TestMemtable(t *testing.T) {
 	}
 }
 
-func testGetSetKeyOn(t *testing.T, table *MemTable) {
+func testGetSetKeyRecord(t *testing.T, table *MemTable) {
 	for i := 5; i >= 0; i-- {
 		key := kv.Key("k" + strconv.Itoa(i))
 		value := kv.Value("v" + strconv.Itoa(i))
@@ -40,7 +40,7 @@ func testGetSetKeyOn(t *testing.T, table *MemTable) {
 	require.True(t, testOrderOfArray(t, table))
 }
 
-func testDeleteKeyOn(t *testing.T, table *MemTable) {
+func testDeleteRecordByKey(t *testing.T, table *MemTable) {
 	for i := 0; i < 5; i++ {
 		key := kv.Key("k" + strconv.Itoa(i))
 		value := kv.Value("v" + strconv.Itoa(i))
@@ -49,8 +49,11 @@ func testDeleteKeyOn(t *testing.T, table *MemTable) {
 
 	// Delete the key
 	table.Delete(kv.Key("k3"))
-	_, found := table.Get(kv.Key("k3"))
-	require.False(t, found)
+	val, found := table.Get(kv.Key("k3"))
+	require.True(t, found)
+
+	// Found the value but it is the tombstone
+	require.Equal(t, kv.Value(""), val)
 
 	// Check the order of the table
 	require.True(t, testOrderOfArray(t, table))
