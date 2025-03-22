@@ -165,6 +165,10 @@ func (s *SSTable) Flush(memtable memtable.MemTable) {
 	s.blocks = append(s.blocks, *block)
 }
 
+func (s *SSTable) FlushWait() {
+	s.flushWg.Wait()
+}
+
 // Close closes the sparseLogChannel and the sparse index WAL
 func (s *SSTable) Close() error {
 	s.flushWg.Wait()
