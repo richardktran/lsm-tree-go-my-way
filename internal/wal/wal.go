@@ -106,7 +106,7 @@ func (w *WAL) ReadCommitLogAfterTimestamp(timestamp int64) ([]kv.Record, error) 
 
 	file, err := os.Open(w.CommitLogPath)
 	if err != nil {
-		return []kv.Record{}, err
+		return nil, err
 	}
 	defer file.Close()
 
