@@ -112,9 +112,13 @@ func testReadDataFlushingToSSTable(t *testing.T, store *LSMTreeStore) {
 	store.Set(key, value)
 
 	// Read data is flushing to SSTable
-	v, found := store.Get(kv.Key("k5"))
-	require.True(t, found)
-	require.Equal(t, kv.Value("v5"), v)
+	for i := 0; i <= 7; i++ {
+		key := kv.Key("k" + strconv.Itoa(i))
+		value := kv.Value("v" + strconv.Itoa(i))
+		v, found := store.Get(key)
+		require.True(t, found)
+		require.Equal(t, value, v)
+	}
 }
 
 func testDeleteKeyOnStore(t *testing.T, store *LSMTreeStore) {

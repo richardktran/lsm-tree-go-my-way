@@ -21,12 +21,13 @@ import (
 var _ store.Store = (*LSMTreeStore)(nil)
 
 type LSMTreeStore struct {
-	config    *config.Config
-	dirConfig *config.DirectoryConfig
-	storeLock sync.RWMutex
-	memTable  *memtable.MemTable
-	ssTables  []*sstable.SSTable
-	wal       *wal.WAL
+	config          *config.Config
+	dirConfig       *config.DirectoryConfig
+	storeLock       sync.RWMutex
+	memTable        *memtable.MemTable
+	freezedMemTable *memtable.MemTable
+	ssTables        []*sstable.SSTable
+	wal             *wal.WAL
 }
 
 // NewStore creates a new LSMTreeStore instance, initializes the WAL, memTable, and SSTables from disk
@@ -65,13 +66,19 @@ func (s *LSMTreeStore) Get(key kv.Key) (kv.Value, bool) {
 	s.storeLock.RLock()
 	defer s.storeLock.RUnlock()
 
-	if value, found := s.memTable.Get(key); found {
-		if string(value) == string(kv.Value("")) {
-			return kv.Value(""), false
+	// Check in-memory tables first
+	for _, table := range []*memtable.MemTable{s.freezedMemTable, s.memTable} {
+		if table != nil {
+			if value, found := table.Get(key); found {
+				if len(value) == 0 { // Check for tombstone
+					return kv.Value(""), false
+				}
+				return value, true
+			}
 		}
-		return value, true
 	}
 
+	// Check SSTables in reverse order
 	for i := len(s.ssTables) - 1; i >= 0; i-- {
 		if value, found := s.ssTables[i].Get(key); found {
 			return value, true
@@ -105,7 +112,9 @@ func (s *LSMTreeStore) Set(key kv.Key, value kv.Value) {
 	// Check if memTable is full
 	if s.memTable.Size()+record.Size() >= s.config.MemTableSizeThreshold {
 		// Flush a clone of the memTable to disk, clone to prevent reading while writing
-		s.flushMemTable(s.memTable.Clone(), &curTimestamp)
+		freezedMemTable := s.memTable.Clone()
+		s.freezedMemTable = &freezedMemTable
+		s.flushMemTable(freezedMemTable, &curTimestamp)
 		s.memTable = memtable.NewMemTable()
 
 		// Write meta log in order to recover the memTable from the last flush
