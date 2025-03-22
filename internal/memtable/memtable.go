@@ -1,7 +1,7 @@
 package memtable
 
 import (
-	"log"
+	"fmt"
 
 	"github.com/richardktran/lsm-tree-go-my-way/internal/kv"
 	"github.com/richardktran/lsm-tree-go-my-way/internal/memtable/algorithm"
@@ -66,7 +66,7 @@ func LoadFromWAL(wal *wal.WAL) (*MemTable, error) {
 	// Read commit log
 	records, err := wal.ReadCommitLogAfterTimestamp(lastTimestamp)
 	if err != nil {
-		log.Printf("error reading commit log after timestamp %d: %v", lastTimestamp, err)
+		return memTable, fmt.Errorf("error reading commit log after timestamp %d: %w", lastTimestamp, err)
 	}
 
 	if len(records) > 0 {
