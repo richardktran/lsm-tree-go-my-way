@@ -74,7 +74,7 @@ value1
 - [x] Should store offset 0 in the Sparse Index when the first key is written to the SSTable
 - [x] Recover `SSTable` from disk by adding `Blocks` information to memory
 - [x] Handle `Read` operation
-- [ ] Handle `Delete` operation
+- [x] Handle `Delete` operation
 - [ ] Handle the case when read the key that is flushing to SSTable
 - [ ] Enhance `WAL` written by channel to avoid blocking the main thread, 
 - [ ] Avoid overhead when open and close the WAL file for each write or read
