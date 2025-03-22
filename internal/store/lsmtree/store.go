@@ -66,6 +66,9 @@ func (s *LSMTreeStore) Get(key kv.Key) (kv.Value, bool) {
 	defer s.storeLock.RUnlock()
 
 	if value, found := s.memTable.Get(key); found {
+		if string(value) == string(kv.Value("")) {
+			return kv.Value(""), false
+		}
 		return value, true
 	}
 
@@ -75,7 +78,7 @@ func (s *LSMTreeStore) Get(key kv.Key) (kv.Value, bool) {
 		}
 	}
 
-	return "", false
+	return kv.Value(""), false
 }
 
 /*
@@ -116,13 +119,9 @@ func (s *LSMTreeStore) Set(key kv.Key, value kv.Value) {
 	}
 }
 
-// Delete removes a key-value pair from the memTable
-// TODO: Will need to implement a tombstone mechanism to handle deletes
+// Delete removes a key-value pair by insert a tombstone record into the memTable
 func (s *LSMTreeStore) Delete(key kv.Key) {
-	s.storeLock.Lock()
-	defer s.storeLock.Unlock()
-
-	s.memTable.Delete(key)
+	s.Set(key, nil)
 }
 
 // Close closes the store and all SSTables

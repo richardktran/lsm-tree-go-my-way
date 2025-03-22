@@ -113,7 +113,7 @@ func (s *SSTable) Get(key kv.Key) (kv.Value, bool) {
 		}
 	}
 
-	return "", false
+	return kv.Value(""), false
 }
 
 /*

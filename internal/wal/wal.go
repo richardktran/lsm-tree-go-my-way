@@ -126,10 +126,20 @@ func (w *WAL) ReadCommitLogAfterTimestamp(timestamp int64) ([]kv.Record, error) 
 		}
 
 		if ts > timestamp {
-			records = append(records, kv.Record{
-				Key:   kv.Key(parts[0]),
-				Value: kv.Value(parts[1]),
-			})
+			if parts[1] == "" {
+				// delete key if value is empty
+				record := kv.Record{
+					Key:   kv.Key(parts[0]),
+					Value: nil,
+				}
+				records = append(records, record)
+			} else {
+				records = append(records, kv.Record{
+					Key:   kv.Key(parts[0]),
+					Value: kv.Value(parts[1]),
+				})
+			}
+
 		}
 	}
 
@@ -137,5 +147,18 @@ func (w *WAL) ReadCommitLogAfterTimestamp(timestamp int64) ([]kv.Record, error) 
 		return nil, err
 	}
 
-	return records, nil
+	valueMap := make(map[kv.Key]kv.Value)
+	for _, record := range records {
+		valueMap[record.Key] = record.Value
+	}
+
+	var filteredRecords []kv.Record
+	for key, value := range valueMap {
+		filteredRecords = append(filteredRecords, kv.Record{
+			Key:   key,
+			Value: value,
+		})
+	}
+
+	return filteredRecords, nil
 }

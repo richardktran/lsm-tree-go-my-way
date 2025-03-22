@@ -14,6 +14,7 @@ func TestLSMTreeStore(t *testing.T) {
 	for scenario, fn := range map[string]func(t *testing.T, store *LSMTreeStore){
 		"Set/Get key on Store":           testGetSetKeyOnStore,
 		"Check trigger flush to SSTable": testTriggerFlushToSSTable,
+		"Test Delete key on Store":       testDeleteKeyOnStore,
 	} {
 		t.Run(scenario, func(t *testing.T) {
 			dir, err := os.MkdirTemp("", "server-test")
@@ -92,4 +93,23 @@ func testTriggerFlushToSSTable(t *testing.T, store *LSMTreeStore) {
 	sstableDir, err = os.ReadDir(store.dirConfig.SSTableDir)
 	require.NoError(t, err)
 	require.NotEmpty(t, sstableDir)
+}
+
+func testDeleteKeyOnStore(t *testing.T, store *LSMTreeStore) {
+	for i := 0; i < 3; i++ {
+		key := kv.Key("k" + strconv.Itoa(i))
+		value := kv.Value("v" + strconv.Itoa(i))
+		store.Set(key, value)
+		v, found := store.Get(key)
+		require.True(t, found)
+		require.Equal(t, value, v)
+	}
+
+	store.Delete(kv.Key("k1"))
+	v, found := store.Get(kv.Key("k1"))
+	require.False(t, found)
+	require.Equal(t, kv.Value(""), v)
+
+	// TODO: Test delete after recovery from WAL
+	// TODO: Delete after flush to SSTable, SHOULD NOT still get value after flush to sstable but delete in memtable
 }

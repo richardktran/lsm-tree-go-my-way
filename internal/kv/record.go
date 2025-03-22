@@ -2,7 +2,7 @@ package kv
 
 type Key string
 
-type Value string
+type Value []byte
 
 type Record struct {
 	Key   Key   `json:"key"`
@@ -13,4 +13,8 @@ type Record struct {
 // Key (1 byte) + Value (1 byte) = 2 bytes
 func (r Record) Size() int {
 	return len(r.Key) + len(r.Value)
+}
+
+func (r Record) IsDeletedRecord() bool {
+	return r.Value == nil
 }
