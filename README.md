@@ -76,7 +76,7 @@ value1
 - [x] Handle `Read` operation
 - [x] Handle `Delete` operation
 - [x] Handle the case when read the key that is flushing to SSTable
-- [ ] Fix race condition in `flushMemTable` function
+- [x] Fix race condition detected by `go test -race`
 - [ ] Lookup `Sparse Index` by binary search
 - [ ] Improve `MemTable` by using `Skip List` as underlying data structure
 - [ ] Improve Read by `Bloom Filter`
