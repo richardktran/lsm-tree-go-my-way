@@ -4,7 +4,6 @@ import (
 	"os"
 	"strconv"
 	"testing"
-	"time"
 
 	"github.com/richardktran/lsm-tree-go-my-way/internal/config"
 	"github.com/richardktran/lsm-tree-go-my-way/internal/kv"
@@ -112,8 +111,6 @@ func testReadDataFlushingToSSTable(t *testing.T, store *LSMTreeStore) {
 	value := kv.Value("v7")
 	store.Set(key, value)
 
-	require.NotNil(t, store.freezedMemTable)
-
 	// Read data is flushing to SSTable
 	for i := 0; i <= 7; i++ {
 		key := kv.Key("k" + strconv.Itoa(i))
@@ -122,10 +119,6 @@ func testReadDataFlushingToSSTable(t *testing.T, store *LSMTreeStore) {
 		require.True(t, found)
 		require.Equal(t, value, v)
 	}
-
-	// Wait for flush to finish, then freezedMemTable should be nil
-	time.Sleep(1 * time.Second)
-	require.Nil(t, store.freezedMemTable)
 }
 
 func testDeleteKeyOnStore(t *testing.T, store *LSMTreeStore) {

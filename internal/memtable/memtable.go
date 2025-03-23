@@ -50,7 +50,12 @@ func (m *MemTable) GetAll() []kv.Record {
 	// Filter out tombstones
 	var records []kv.Record
 	for _, record := range allData {
-		if record.Value != nil {
+		if record.Value == nil {
+			records = append(records, kv.Record{
+				Key:   record.Key,
+				Value: kv.Value(""),
+			})
+		} else {
 			records = append(records, record)
 		}
 	}
