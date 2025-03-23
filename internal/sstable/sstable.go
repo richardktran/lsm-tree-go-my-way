@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -39,6 +40,7 @@ Folder name pattern: data/sstables/<id>/<offset>.sst
 type SSTable struct {
 	id               uint64
 	sparseIndex      map[kv.Key]uint64 // key -> offset
+	sparseIndexLock  sync.Mutex
 	blocks           []Block
 	config           config.Config
 	dirConfig        *config.DirectoryConfig
@@ -104,7 +106,7 @@ func (s *SSTable) Get(key kv.Key) (kv.Value, bool) {
 
 	for _, block := range s.blocks {
 		if block.baseOffset < startOffset {
-			continue
+			break
 		}
 
 		value, found := block.Get(key)
@@ -144,12 +146,16 @@ func (s *SSTable) Flush(memtable memtable.MemTable) {
 				return
 			}
 
+			s.sparseIndexLock.Lock()
 			s.sparseIndex[record.Key] = baseOffset
+			s.sparseIndexLock.Unlock()
 			s.sparseLogChannel <- record
 		}
 
 		if index == 0 {
+			s.sparseIndexLock.Lock()
 			s.sparseIndex[record.Key] = baseOffset
+			s.sparseIndexLock.Unlock()
 			s.sparseLogChannel <- record
 		}
 
@@ -163,6 +169,15 @@ func (s *SSTable) Flush(memtable memtable.MemTable) {
 	}
 
 	s.blocks = append(s.blocks, *block)
+
+	// sort blocks by base offset
+	s.SortBlocks()
+}
+
+func (s *SSTable) SortBlocks() {
+	sort.Slice(s.blocks, func(i, j int) bool {
+		return s.blocks[i].baseOffset > s.blocks[j].baseOffset
+	})
 }
 
 func (s *SSTable) FlushWait() {
@@ -214,7 +229,9 @@ func (s *SSTable) persistSparseIndex() {
 	defer s.sparseLogFile.Close()
 
 	for record := range s.sparseLogChannel {
+		s.sparseIndexLock.Lock()
 		entry := fmt.Sprintf("%s:%d\n", record.Key, s.sparseIndex[record.Key])
+		s.sparseIndexLock.Unlock()
 		_, err := s.sparseLogFile.WriteString(entry)
 		if err != nil {
 			log.Println("Error writing to sparse index WAL: ", err)

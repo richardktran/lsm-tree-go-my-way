@@ -77,6 +77,7 @@ value1
 - [x] Handle `Delete` operation
 - [x] Handle the case when read the key that is flushing to SSTable
 - [ ] Fix race condition in `flushMemTable` function
+- [ ] Lookup `Sparse Index` by binary search
 - [ ] Improve `MemTable` by using `Skip List` as underlying data structure
 - [ ] Improve Read by `Bloom Filter`
 - [ ] Enhance `WAL` written by channel to avoid blocking the main thread, 

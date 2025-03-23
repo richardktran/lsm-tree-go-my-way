@@ -109,18 +109,18 @@ func testFindADeletedKey(t *testing.T, rootDir string) {
 
 	key := kv.Key("k2")
 	value := kv.Value("")
-	memtable.Set(key, value)
+	memtable.Delete(key)
 
 	sstable := NewSSTable(sstableId, cfg, dirConfig)
 	defer sstable.Close()
 
 	sstable.Flush(*memtable)
 
-	time.Sleep(2 * time.Second)
+	sstable.FlushWait()
 
 	// read k2 from sstable
 	v, found := sstable.Get(key)
-	require.False(t, found)
+	require.True(t, found) // Found the tombstone record
 	require.Equal(t, value, v)
 }
 

@@ -139,7 +139,7 @@ func (b *Block) Get(key kv.Key) (kv.Value, bool) {
 
 		if kv.Key(keyData) == key {
 			if valueLen == 0 {
-				return kv.Value(""), false
+				return kv.Value(""), true
 			}
 
 			return kv.Value(value), true
