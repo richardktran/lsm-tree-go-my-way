@@ -25,6 +25,8 @@ func main() {
 		MemTableSizeThreshold: 30, // bytes
 		SSTableBlockSize:      20, // bytes
 		SparseWALBufferSize:   2,  // records
+		BloomFilterSize:       100,
+		BloomFilterHashCount:  3,
 		RootDataDir:           "./data",
 	}
 

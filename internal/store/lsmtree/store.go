@@ -97,6 +97,9 @@ func (s *LSMTreeStore) Get(key kv.Key) (kv.Value, bool) {
 	defer s.sstableLock.RUnlock()
 	// Check SSTables in reverse order
 	for i := len(s.ssTables) - 1; i >= 0; i-- {
+		if !s.ssTables[i].BloomFilter.MightContain(string(key)) {
+			continue
+		}
 		if value, found := s.ssTables[i].Get(key); found {
 			return value, true
 		}

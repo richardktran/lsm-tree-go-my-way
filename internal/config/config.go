@@ -7,4 +7,6 @@ type Config struct {
 	SSTableBlockSize      uint64
 	RootDataDir           string
 	SparseWALBufferSize   uint64
+	BloomFilterSize       uint64
+	BloomFilterHashCount  int
 }
