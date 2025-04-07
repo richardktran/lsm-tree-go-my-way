@@ -15,6 +15,7 @@ import (
 	"github.com/richardktran/lsm-tree-go-my-way/internal/config"
 	"github.com/richardktran/lsm-tree-go-my-way/internal/kv"
 	"github.com/richardktran/lsm-tree-go-my-way/internal/memtable"
+	"github.com/richardktran/lsm-tree-go-my-way/pkg/bloomfilter"
 )
 
 /*
@@ -48,6 +49,7 @@ type SSTable struct {
 	sparseLogChannel chan kv.Record // write-ahead log for SparseIndex
 	CreatedAt        int64
 	flushWg          sync.WaitGroup
+	BloomFilter      *bloomfilter.BloomFilter
 }
 
 /*
@@ -84,6 +86,15 @@ func NewSSTable(id uint64, config *config.Config, dirConfig *config.DirectoryCon
 
 	// Start a goroutine to consume the record from the sparseLogChannel and write to the sparse index WAL
 	go s.persistSparseIndex()
+
+	// Build the bloom filter
+	s.BloomFilter = bloomfilter.NewBloomFilter(config.BloomFilterSize, config.BloomFilterHashCount)
+	for _, block := range s.blocks {
+		records, _ := block.GetAll()
+		for _, record := range records {
+			s.BloomFilter.Add(string(record.Key))
+		}
+	}
 
 	return s
 }

@@ -149,6 +149,56 @@ func (b *Block) Get(key kv.Key) (kv.Value, bool) {
 	return kv.Value(""), false
 }
 
+// GetAll reads all records from the block file and returns them as a slice of kv.Record
+func (b *Block) GetAll() ([]kv.Record, error) {
+	b.buf.Flush()
+
+	_, err := b.file.Seek(0, io.SeekStart)
+	if err != nil {
+		return nil, err
+	}
+
+	reader := bufio.NewReader(b.file)
+	var records []kv.Record
+
+	for {
+		var keyLen uint64
+		err := binary.Read(reader, enc, &keyLen)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		keyData := make([]byte, keyLen)
+		_, err = io.ReadFull(reader, keyData)
+		if err != nil {
+			return nil, err
+		}
+
+		var valueLen uint64
+		err = binary.Read(reader, enc, &valueLen)
+		if err != nil {
+			return nil, err
+		}
+
+		value := make([]byte, valueLen)
+		_, err = io.ReadFull(reader, value)
+		if err != nil {
+			return nil, err
+		}
+
+		record := kv.Record{
+			Key:   kv.Key(keyData),
+			Value: kv.Value(value),
+		}
+		records = append(records, record)
+	}
+
+	return records, nil
+}
+
 // IsMax checks if the block file has reached the threshold size, used to determine if a new block is needed
 func (b *Block) IsMax(threshold uint64) bool {
 	stat, _ := b.file.Stat()
