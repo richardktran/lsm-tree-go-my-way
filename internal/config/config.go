@@ -9,4 +9,5 @@ type Config struct {
 	SparseWALBufferSize   uint64
 	BloomFilterSize       uint64
 	BloomFilterHashCount  int
+	CompactionThreshold int
 }
