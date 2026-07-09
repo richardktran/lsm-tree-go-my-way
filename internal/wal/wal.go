@@ -38,7 +38,7 @@ func (w *WAL) WriteCommitLog(record *kv.Record, timestamp *uint64) (int, error) 
 	w.commitLogLock.Lock()
 	defer w.commitLogLock.Unlock()
 
-	data := fmt.Sprintf("%s:%s:%d\n", record.Key, record.Value, timestamp)
+	data := fmt.Sprintf("%s:%s:%d\n", record.Key, record.Value, *timestamp)
 
 	commitLog, err := os.OpenFile(w.CommitLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
@@ -53,7 +53,7 @@ func (w *WAL) WriteMetaLog(timestamp *uint64) (int, error) {
 	w.metaLogLock.Lock()
 	defer w.metaLogLock.Unlock()
 
-	data := fmt.Sprintf("%d\n", timestamp)
+	data := fmt.Sprintf("%d\n", *timestamp)
 
 	metaLog, err := os.OpenFile(w.MetaLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
