@@ -106,10 +106,10 @@ If the key is not found, find the next block until the key is found.
 If the key is not found in any block, return false
 */
 func (s *SSTable) Get(key kv.Key) (kv.Value, bool) {
-	// TODO: Implement a binary search to find the block that contains the key
+	// TODO: Replace with binary search once sparseIndex is stored as a sorted slice
 	var closestKey kv.Key
 	for k := range s.sparseIndex {
-		if k <= key {
+		if k <= key && k >= closestKey {
 			closestKey = k
 		}
 	}
@@ -237,8 +237,6 @@ persistSparseIndex receives records from the sparseLogChannel and writes them to
 Whenever a new record is added to the sparseLogChannel, it is written to the sparse index WAL
 */
 func (s *SSTable) persistSparseIndex() {
-	defer s.sparseLogFile.Close()
-
 	for record := range s.sparseLogChannel {
 		s.sparseIndexLock.Lock()
 		entry := fmt.Sprintf("%s:%d\n", record.Key, s.sparseIndex[record.Key])

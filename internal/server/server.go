@@ -76,6 +76,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 func (s *Server) handleGet(conn net.Conn, parts []string) {
 	if len(parts) != 2 {
 		fmt.Fprintf(conn, "ERROR: %s command requires exactly 1 argument", constant.GET)
+		return
 	}
 	val, exists := s.store.Get(kv.Key(parts[1]))
 	if !exists {

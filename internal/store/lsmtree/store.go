@@ -101,6 +101,9 @@ func (s *LSMTreeStore) Get(key kv.Key) (kv.Value, bool) {
 			continue
 		}
 		if value, found := s.ssTables[i].Get(key); found {
+			if len(value) == 0 { // empty value means tombstone — key was deleted
+				return kv.Value(""), false
+			}
 			return value, true
 		}
 	}
