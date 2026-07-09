@@ -47,6 +47,7 @@ type SSTable struct {
 	dirConfig        *config.DirectoryConfig
 	sparseLogFile    *os.File
 	sparseLogChannel chan kv.Record // write-ahead log for SparseIndex
+	sparseIndexWg    sync.WaitGroup // tracks the persistSparseIndex goroutine
 	CreatedAt        int64
 	flushWg          sync.WaitGroup
 	BloomFilter      *bloomfilter.BloomFilter
@@ -84,8 +85,13 @@ func NewSSTable(id uint64, config *config.Config, dirConfig *config.DirectoryCon
 
 	s.sparseLogFile = sparseLogFile
 
-	// Start a goroutine to consume the record from the sparseLogChannel and write to the sparse index WAL
-	go s.persistSparseIndex()
+	// Start a goroutine to consume the record from the sparseLogChannel and write to the sparse index WAL.
+	// sparseIndexWg tracks this goroutine so Close() can wait for all writes to land before closing the file.
+	s.sparseIndexWg.Add(1)
+	go func() {
+		defer s.sparseIndexWg.Done()
+		s.persistSparseIndex()
+	}()
 
 	// Build the bloom filter
 	s.BloomFilter = bloomfilter.NewBloomFilter(config.BloomFilterSize, config.BloomFilterHashCount)
@@ -199,13 +205,112 @@ func (s *SSTable) FlushWait() {
 func (s *SSTable) Close() error {
 	s.flushWg.Wait()
 	close(s.sparseLogChannel)
+	s.sparseIndexWg.Wait()
 	return s.sparseLogFile.Close()
 }
 
+// GetAll returns every record stored across all blocks of this SSTable
+func (s *SSTable) GetAll() []kv.Record {
+	var records []kv.Record
+	for _, b := range s.blocks {
+		// Open a fresh handle regardless of whether the stored one is still open.
+		freshBlock, err := NewBlock(s.id, b.baseOffset, s.dirConfig)
+		if err != nil {
+			log.Printf("sstable.GetAll: error opening block at offset %d: %v", b.baseOffset, err)
+			continue
+		}
+		recs, readErr := freshBlock.GetAll()
+		_ = freshBlock.Close()
+		if readErr != nil {
+			log.Printf("sstable.GetAll: error reading block at offset %d: %v", b.baseOffset, readErr)
+			continue
+		}
+		records = append(records, recs...)
+	}
+	return records
+}
+
+// FlushRecords writes a pre-sorted slice of records directly to this SSTable
+func (s *SSTable) FlushRecords(records []kv.Record) {
+	s.flushWg.Add(1)
+	defer s.flushWg.Done()
+
+	if len(records) == 0 {
+		return
+	}
+
+	var baseOffset uint64
+	block, err := NewBlock(s.id, baseOffset, s.dirConfig)
+	if err != nil {
+		log.Println("FlushRecords: error creating block:", err)
+		return
+	}
+
+	for index, record := range records {
+		if block.IsMax(s.config.SSTableBlockSize) {
+			s.blocks = append(s.blocks, *block)
+			block.Close()
+			block, err = NewBlock(s.id, baseOffset, s.dirConfig)
+			if err != nil {
+				log.Println("FlushRecords: error creating block:", err)
+				return
+			}
+
+			s.sparseIndexLock.Lock()
+			s.sparseIndex[record.Key] = baseOffset
+			s.sparseIndexLock.Unlock()
+			s.sparseLogChannel <- record
+		}
+
+		if index == 0 {
+			s.sparseIndexLock.Lock()
+			s.sparseIndex[record.Key] = baseOffset
+			s.sparseIndexLock.Unlock()
+			s.sparseLogChannel <- record
+		}
+
+		blockLen, _, err := block.Add(record)
+		if err != nil {
+			log.Println("FlushRecords: error adding record:", err)
+			return
+		}
+		baseOffset += uint64(blockLen)
+	}
+
+	s.blocks = append(s.blocks, *block)
+	s.SortBlocks()
+}
+
+// DeleteFromDisk removes all on-disk artefacts belonging to this SSTable:
+// the block directory and the sparse-index file
+func (s *SSTable) DeleteFromDisk() error {
+	blockDir := path.Join(s.dirConfig.SSTableDir, fmt.Sprintf("%d", s.id))
+	if err := os.RemoveAll(blockDir); err != nil {
+		return fmt.Errorf("sstable.DeleteFromDisk: remove blocks: %w", err)
+	}
+
+	indexFilePath := path.Join(s.dirConfig.SparseIndexDir, fmt.Sprintf("%d.index", s.id))
+	if err := os.Remove(indexFilePath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("sstable.DeleteFromDisk: remove index: %w", err)
+	}
+
+	return nil
+}
+
+// CloseAndDelete is a convenience wrapper that closes the SSTable and then
+// removes all its on-disk files.
+func (s *SSTable) CloseAndDelete() error {
+	if err := s.Close(); err != nil {
+		return err
+	}
+	return s.DeleteFromDisk()
+}
+
 /*
-recoverBlocks reads the SSTable directory and recovers all blocks in memory
-NewBlock is called to create or open the block by id of sstable and offset of block
-Update the blocks list with the recovered blocks in memory
+recoverBlocks reads the SSTable directory and recovers all blocks in memory.
+NewBlock is called to create or open the block by id of sstable and offset of block.
+Blocks are sorted descending by baseOffset (same invariant as after Flush) so that
+SSTable.Get() works correctly.
 */
 func (s *SSTable) recoverBlocks() {
 	blocks := make([]Block, 0)
@@ -230,6 +335,7 @@ func (s *SSTable) recoverBlocks() {
 	}
 
 	s.blocks = blocks
+	s.SortBlocks()
 }
 
 /*
