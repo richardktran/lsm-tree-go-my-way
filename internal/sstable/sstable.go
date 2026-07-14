@@ -358,7 +358,9 @@ func (s *SSTable) persistSparseIndex() {
 func (s *SSTable) recoverSparseIndex(filePath string) {
 	sparseLogFile, err := os.Open(filePath)
 	if err != nil {
-		log.Println("Error opening sparse index file: ", err)
+		if !os.IsNotExist(err) {
+			log.Println("Error opening sparse index file: ", err)
+		}
 		return
 	}
 	defer sparseLogFile.Close()
