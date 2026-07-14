@@ -14,7 +14,7 @@ type MemTable struct {
 
 func NewMemTable() *MemTable {
 	return &MemTable{
-		sortedData: algorithm.NewSortedArray(),
+		sortedData: algorithm.NewSkipList(),
 	}
 }
 
@@ -75,7 +75,7 @@ func LoadFromWAL(wal *wal.WAL) (*MemTable, error) {
 	}
 
 	if len(records) > 0 {
-		memTable.sortedData = algorithm.BuildSortedArray(records)
+		memTable.sortedData = algorithm.BuildSkipList(records)
 	}
 
 	return memTable, nil
