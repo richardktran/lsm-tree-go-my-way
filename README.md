@@ -78,9 +78,9 @@ value1
 - [x] Handle the case when read the key that is flushing to SSTable
 - [x] Fix race condition detected by `go test -race`
 - [x] Improve Read by `Bloom Filter`
-- [ ] Improve `MemTable` by using `Skip List` as underlying data structure
-- [ ] Implement `Compaction` to merge multiple SSTables into one SSTable
-- [ ] Lookup `Sparse Index` by binary search
+- [x] Improve `MemTable` by using `Skip List` as underlying data structure
+- [x] Implement `Compaction` to merge multiple SSTables into one SSTable
+- [x] Lookup `Sparse Index` by binary search
 - [ ] Enhance `WAL` written by channel to avoid blocking the main thread, 
 - [ ] Avoid overhead when open and close the WAL file for each write or read
 - [ ] Handle the case when server is crashed during flushing to SSTable

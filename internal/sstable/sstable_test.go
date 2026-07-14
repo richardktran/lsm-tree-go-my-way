@@ -137,9 +137,16 @@ func checkSSTableFiles(t *testing.T, sstableId uint64, cfg *config.Config, dirCo
 }
 
 func checkSparseIndex(t *testing.T, sstable *SSTable, expected map[string]uint64) {
-	require.Equal(t, len(expected), len(sstable.sparseIndex))
+	require.Equal(t, len(expected), len(sstable.sparseEntries))
 	for key, offset := range expected {
-		require.Equal(t, offset, sstable.sparseIndex[kv.Key(key)])
+		foundOffset, ok := sstable.findSparseOffset(kv.Key(key))
+		require.True(t, ok)
+		require.Equal(t, offset, foundOffset)
+	}
+
+	// sparseEntries must remain sorted by key for binary search
+	for i := 1; i < len(sstable.sparseEntries); i++ {
+		require.Less(t, sstable.sparseEntries[i-1].key, sstable.sparseEntries[i].key)
 	}
 
 	indexFilePath := path.Join(sstable.dirConfig.SparseIndexDir, strconv.Itoa(int(sstable.id))+".index")

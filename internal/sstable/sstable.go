@@ -38,16 +38,21 @@ Folder name pattern: data/sstables/<id>/<offset>.sst
   - valueLen: the length of the value
   - value: the value of the record
 */
+type sparseEntry struct {
+	key    kv.Key
+	offset uint64
+}
+
 type SSTable struct {
 	id               uint64
-	sparseIndex      map[kv.Key]uint64 // key -> offset
+	sparseEntries    []sparseEntry // always sorted by key
 	sparseIndexLock  sync.Mutex
 	blocks           []Block
 	config           config.Config
 	dirConfig        *config.DirectoryConfig
 	sparseLogFile    *os.File
-	sparseLogChannel chan kv.Record // write-ahead log for SparseIndex
-	sparseIndexWg    sync.WaitGroup // tracks the persistSparseIndex goroutine
+	sparseLogChannel chan sparseEntry // write-ahead log for SparseIndex
+	sparseIndexWg    sync.WaitGroup   // tracks the persistSparseIndex goroutine
 	CreatedAt        int64
 	flushWg          sync.WaitGroup
 	BloomFilter      *bloomfilter.BloomFilter
@@ -59,10 +64,10 @@ NewSSTable creates a new SSTable instance, initializes the sparse index and reco
 func NewSSTable(id uint64, config *config.Config, dirConfig *config.DirectoryConfig) *SSTable {
 	s := &SSTable{
 		id:               id,
-		sparseIndex:      make(map[kv.Key]uint64),
+		sparseEntries:    make([]sparseEntry, 0),
 		blocks:           make([]Block, 0),
 		config:           *config,
-		sparseLogChannel: make(chan kv.Record, config.SparseWALBufferSize),
+		sparseLogChannel: make(chan sparseEntry, config.SparseWALBufferSize),
 		dirConfig:        dirConfig,
 		CreatedAt:        time.Now().UnixNano(),
 	}
@@ -112,14 +117,10 @@ If the key is not found, find the next block until the key is found.
 If the key is not found in any block, return false
 */
 func (s *SSTable) Get(key kv.Key) (kv.Value, bool) {
-	// TODO: Replace with binary search once sparseIndex is stored as a sorted slice
-	var closestKey kv.Key
-	for k := range s.sparseIndex {
-		if k <= key && k >= closestKey {
-			closestKey = k
-		}
+	startOffset, ok := s.findSparseOffset(key)
+	if !ok {
+		return kv.Value(""), false
 	}
-	startOffset := s.sparseIndex[closestKey]
 
 	for _, block := range s.blocks {
 		if block.baseOffset < startOffset {
@@ -133,6 +134,35 @@ func (s *SSTable) Get(key kv.Key) (kv.Value, bool) {
 	}
 
 	return kv.Value(""), false
+}
+
+// findSparseOffset binary-searches sparseEntries for the largest entry with key <= target.
+func (s *SSTable) findSparseOffset(key kv.Key) (uint64, bool) {
+	n := len(s.sparseEntries)
+	if n == 0 {
+		return 0, false
+	}
+
+	// sort.Search returns the smallest i where sparseEntries[i].key > key,
+	// so the largest entry with key <= target is at i-1.
+	i := sort.Search(n, func(i int) bool {
+		return s.sparseEntries[i].key > key
+	})
+	if i == 0 {
+		return 0, false
+	}
+
+	return s.sparseEntries[i-1].offset, true
+}
+
+// addSparseEntry appends a sparse index entry (keys are inserted in sorted order during flush)
+// and queues it for persistence.
+func (s *SSTable) addSparseEntry(key kv.Key, offset uint64) {
+	entry := sparseEntry{key: key, offset: offset}
+	s.sparseIndexLock.Lock()
+	s.sparseEntries = append(s.sparseEntries, entry)
+	s.sparseIndexLock.Unlock()
+	s.sparseLogChannel <- entry
 }
 
 /*
@@ -163,17 +193,11 @@ func (s *SSTable) Flush(memtable memtable.MemTable) {
 				return
 			}
 
-			s.sparseIndexLock.Lock()
-			s.sparseIndex[record.Key] = baseOffset
-			s.sparseIndexLock.Unlock()
-			s.sparseLogChannel <- record
+			s.addSparseEntry(record.Key, baseOffset)
 		}
 
 		if index == 0 {
-			s.sparseIndexLock.Lock()
-			s.sparseIndex[record.Key] = baseOffset
-			s.sparseIndexLock.Unlock()
-			s.sparseLogChannel <- record
+			s.addSparseEntry(record.Key, baseOffset)
 		}
 
 		blockLen, _, err := block.Add(record)
@@ -256,17 +280,11 @@ func (s *SSTable) FlushRecords(records []kv.Record) {
 				return
 			}
 
-			s.sparseIndexLock.Lock()
-			s.sparseIndex[record.Key] = baseOffset
-			s.sparseIndexLock.Unlock()
-			s.sparseLogChannel <- record
+			s.addSparseEntry(record.Key, baseOffset)
 		}
 
 		if index == 0 {
-			s.sparseIndexLock.Lock()
-			s.sparseIndex[record.Key] = baseOffset
-			s.sparseIndexLock.Unlock()
-			s.sparseLogChannel <- record
+			s.addSparseEntry(record.Key, baseOffset)
 		}
 
 		blockLen, _, err := block.Add(record)
@@ -339,22 +357,20 @@ func (s *SSTable) recoverBlocks() {
 }
 
 /*
-persistSparseIndex receives records from the sparseLogChannel and writes them to the sparse index WAL
-Whenever a new record is added to the sparseLogChannel, it is written to the sparse index WAL
+persistSparseIndex receives entries from the sparseLogChannel and writes them to the sparse index WAL
+Whenever a new entry is added to the sparseLogChannel, it is written to the sparse index WAL
 */
 func (s *SSTable) persistSparseIndex() {
-	for record := range s.sparseLogChannel {
-		s.sparseIndexLock.Lock()
-		entry := fmt.Sprintf("%s:%d\n", record.Key, s.sparseIndex[record.Key])
-		s.sparseIndexLock.Unlock()
-		_, err := s.sparseLogFile.WriteString(entry)
+	for entry := range s.sparseLogChannel {
+		line := fmt.Sprintf("%s:%d\n", entry.key, entry.offset)
+		_, err := s.sparseLogFile.WriteString(line)
 		if err != nil {
 			log.Println("Error writing to sparse index WAL: ", err)
 		}
 	}
 }
 
-// recoverSparseIndex reads the sparse index file and recovers the sparse index map in memory.
+// recoverSparseIndex reads the sparse index file and recovers the sorted sparseEntries slice in memory.
 func (s *SSTable) recoverSparseIndex(filePath string) {
 	sparseLogFile, err := os.Open(filePath)
 	if err != nil {
@@ -366,6 +382,8 @@ func (s *SSTable) recoverSparseIndex(filePath string) {
 	defer sparseLogFile.Close()
 	scanner := bufio.NewScanner(sparseLogFile)
 
+	// Use a map first so duplicate keys in the WAL keep the latest offset, matching prior behavior.
+	index := make(map[kv.Key]uint64)
 	for scanner.Scan() {
 		line := scanner.Text()
 		if line == "" {
@@ -386,7 +404,14 @@ func (s *SSTable) recoverSparseIndex(filePath string) {
 			continue
 		}
 
-		s.sparseIndex[key] = uint64(offset)
+		index[key] = uint64(offset)
 	}
 
+	s.sparseEntries = make([]sparseEntry, 0, len(index))
+	for key, offset := range index {
+		s.sparseEntries = append(s.sparseEntries, sparseEntry{key: key, offset: offset})
+	}
+	sort.Slice(s.sparseEntries, func(i, j int) bool {
+		return s.sparseEntries[i].key < s.sparseEntries[j].key
+	})
 }
